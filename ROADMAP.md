@@ -1,54 +1,54 @@
 # Auto-Sell MVP — Implementation Roadmap
 
-## Phase 1 — Scaffolding
+## Phase 1 — Scaffolding ✅
 
-- [ ] Create `pyproject.toml` with all dependencies (Django, Django Ninja, Celery, Redis, psycopg2, openai, boto3, pytest, etc.)
-- [ ] Run `uv venv .venv` and `uv pip install -r requirements.txt`
-- [ ] Scaffold Django project: `auto_sell/` package with `settings/base.py`, `settings/local.py`, `settings/production.py`
-- [ ] Create `auto_sell/celery.py` (Celery app init)
-- [ ] Create `auto_sell/api.py` (Django Ninja root router)
-- [ ] Create `auto_sell/urls.py` (wire Ninja router + admin)
-- [ ] Create `manage.py`
-- [ ] Create `docker-compose.yml` (postgres + redis by default; `--profile full` adds web + worker)
-- [ ] Create `Dockerfile`
-- [ ] Create `.env.example`
-- [ ] Create `CLAUDE.md` at project root
-- [ ] Initialize git repo + `.gitignore`
+- [x] Create `pyproject.toml` with all dependencies (Django, Django Ninja, Celery, Redis, psycopg2, openai, boto3, pytest, etc.)
+- [x] Run `uv venv .venv` and install dependencies
+- [x] Scaffold Django project: `auto_sell/` package with `settings/base.py`, `settings/local.py`, `settings/production.py`
+- [x] Create `auto_sell/celery.py` (Celery app init)
+- [x] Create `auto_sell/api.py` (Django Ninja root router)
+- [x] Create `auto_sell/urls.py` (wire Ninja router + admin)
+- [x] Create `manage.py`
+- [x] Create `docker-compose.yml` (postgres + redis by default; `--profile full` adds web + worker)
+- [x] Create `Dockerfile`
+- [x] Create `.env.example`
+- [x] Create `CLAUDE.md` at project root
+- [x] Initialize git repo + `.gitignore`
 
 ---
 
-## Phase 2 — Tenants App
+## Phase 2 — Tenants App (models done, encryption pending)
 
-- [ ] `python manage.py startapp tenants` → move to `apps/tenants/`
-- [ ] Create `Tenant` model (UUID PK, slug, WhatsApp credentials, owner contact, `is_active`)
-- [ ] Create `TenantUser` model (FK to Tenant + Django User)
+- [x] App created at `apps/tenants/`
+- [x] Create `Tenant` model (UUID PK, slug, WhatsApp credentials, owner contact, `is_active`)
+- [x] Create `TenantUser` model (FK to Tenant + Django User)
 - [ ] Add field-level encryption for `wa_access_token` (use `django-fernet-fields`)
-- [ ] Register `Tenant` and `TenantUser` in Django Admin
-- [ ] Write and run migrations
+- [x] Register `Tenant` and `TenantUser` in Django Admin
+- [x] Write and run migrations
 
 ---
 
-## Phase 3 — Catalog App
+## Phase 3 — Catalog App (models done, services pending)
 
-- [ ] `python manage.py startapp catalog` → move to `apps/catalog/`
-- [ ] Create `Product` model (UUID, tenant FK, name, description, price_min, price_max, currency, is_available, `search_vector`)
-- [ ] Create `ProductMedia` model (product FK, media_type, s3_key, cdn_url, wa_media_id, sort_order)
-- [ ] Add GIN index on `search_vector`
-- [ ] Wire `post_save` signal to update `search_vector` on Product save
+- [x] App created at `apps/catalog/`
+- [x] Create `Product` model (UUID, tenant FK, name, description, price_min, price_max, currency, is_available, `search_vector`)
+- [x] Create `ProductMedia` model (product FK, media_type, s3_key, cdn_url, wa_media_id, sort_order)
+- [x] Add GIN index on `search_vector`
+- [x] Wire `post_save` signal to update `search_vector` on Product save
 - [ ] Create `apps/catalog/storage.py` — boto3 S3/R2 client, `upload_product_media()`, `generate_presigned_url()`
 - [ ] Create `apps/catalog/search.py` — `get_relevant_products(tenant_id, query_text, limit=5)`
 - [ ] Add Django Ninja endpoint for media upload (`POST /api/catalog/products/{id}/media/`)
-- [ ] Register Product and ProductMedia in Django Admin (with inline media)
-- [ ] Write and run migrations
-- [ ] Set up `pytest` + `conftest.py` + first catalog tests
+- [x] Register Product and ProductMedia in Django Admin (with inline media)
+- [x] Write and run migrations
+- [ ] Set up first catalog tests
 
 ---
 
-## Phase 4 — Conversations App + WhatsApp Webhook
+## Phase 4 — Conversations App + WhatsApp Webhook (models done, logic pending)
 
-- [ ] `python manage.py startapp conversations` → move to `apps/conversations/`
-- [ ] Create `Conversation` model (UUID, tenant FK, customer_wa_id, state, context_summary; `unique_together = (tenant, customer_wa_id)`)
-- [ ] Create `Message` model (conversation FK, role, content, wa_message_id)
+- [x] App created at `apps/conversations/`
+- [x] Create `Conversation` model (UUID, tenant FK, customer_wa_id, state, context_summary; `unique_together = (tenant, customer_wa_id)`)
+- [x] Create `Message` model (conversation FK, role, content, wa_message_id)
 - [ ] Create `apps/conversations/whatsapp.py` — `WhatsAppClient` with `send_text()`, `send_media()`, `upload_media()`
 - [ ] Create `apps/conversations/llm.py` — DeepSeek client (`openai` SDK, `base_url=https://api.deepseek.com/v1`)
 - [ ] Create `apps/conversations/prompts.py` — system prompt assembly (3-part: rules + catalog context + tool defs)
@@ -65,18 +65,18 @@
   - [ ] Idempotency check via `Message.wa_message_id`
   - [ ] Persist inbound message, enqueue `process_message`, return 200
 - [ ] Handle Meta webhook verification (`GET` with `hub.challenge`)
-- [ ] Write and run migrations
+- [x] Write and run migrations
 - [ ] Write tests for prompt assembly and tool call parsing
 
 ---
 
-## Phase 5 — Payments App
+## Phase 5 — Payments App (models done, gateway logic pending)
 
-- [ ] `python manage.py startapp payments` → move to `apps/payments/`
+- [x] App created at `apps/payments/`
 - [ ] Create `PaymentGateway` ABC in `apps/payments/gateways/base.py` (`initialize_transaction()`, `verify_webhook_signature()`)
 - [ ] Create `apps/payments/gateways/paystack.py` implementing the ABC
-- [ ] Create `PaymentLink` model (UUID, conversation FK, tenant FK, amount, currency, gateway, gateway_reference, payment_url, status, paid_at)
-- [ ] Create `Sale` model (OneToOne to PaymentLink, customer_wa_id, amount_paid, items_snapshot JSONField, gateway_payload JSONField)
+- [x] Create `PaymentLink` model (UUID, conversation FK, tenant FK, amount, currency, gateway, gateway_reference, payment_url, status, paid_at)
+- [x] Create `Sale` model (OneToOne to PaymentLink, customer_wa_id, amount_paid, items_snapshot JSONField, gateway_payload JSONField)
 - [ ] Create Celery task `create_payment_link(conversation_id, product_id, agreed_price)`:
   - [ ] Validate price within product range
   - [ ] Call Paystack initialize transaction
@@ -86,22 +86,22 @@
   - [ ] Verify `X-Paystack-Signature` HMAC
   - [ ] On `charge.success`: update `PaymentLink`, create `Sale`, update `Conversation.state = "completed"`
   - [ ] Enqueue `alert_owner` and `send_confirmation` tasks
-- [ ] Register PaymentLink and Sale in Django Admin
-- [ ] Write and run migrations
+- [x] Register PaymentLink and Sale in Django Admin
+- [x] Write and run migrations
 - [ ] Write tests for Paystack signature verification and payment flow
 
 ---
 
-## Phase 6 — Notifications App
+## Phase 6 — Notifications App (models done, tasks pending)
 
-- [ ] `python manage.py startapp notifications` → move to `apps/notifications/`
-- [ ] Create `NotificationLog` model (tenant FK, sale FK, channel, status, sent_at)
+- [x] App created at `apps/notifications/`
+- [x] Create `NotificationLog` model (tenant FK, sale FK, channel, status, sent_at)
 - [ ] Create Celery task `alert_owner(sale_id)`:
   - [ ] Send WhatsApp message to `tenant.owner_phone` with sale summary
   - [ ] Log to `NotificationLog`
 - [ ] Create Celery task `send_confirmation(conversation_id)`:
   - [ ] Send WhatsApp confirmation to customer
-- [ ] Write and run migrations
+- [x] Write and run migrations
 
 ---
 

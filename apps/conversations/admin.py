@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Conversation, Message
+from apps.tenants.admin_site import tenant_admin
 
 
 class MessageInline(admin.TabularInline):
@@ -11,6 +12,8 @@ class MessageInline(admin.TabularInline):
     def has_add_permission(self, request, obj=None):
         return False
 
+
+# --- Platform admin (superusers at /admin/) ---
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
@@ -27,3 +30,30 @@ class MessageAdmin(admin.ModelAdmin):
     list_filter = ["role"]
     search_fields = ["content", "wa_message_id"]
     readonly_fields = ["created_at"]
+
+
+# --- Tenant admin (business owners at /tenant/) ---
+
+class TenantConversationAdmin(admin.ModelAdmin):
+    list_display = ["customer_wa_id", "state", "created_at", "last_message_at"]
+    list_filter = ["state"]
+    search_fields = ["customer_wa_id"]
+    readonly_fields = ["id", "customer_wa_id", "state", "context_summary", "created_at", "last_message_at"]
+    inlines = [MessageInline]
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(
+            tenant=request.user.tenant_profile.tenant
+        )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+tenant_admin.register(Conversation, TenantConversationAdmin)

@@ -4,6 +4,19 @@ A multi-tenant SaaS platform that automates WhatsApp-based sales for small busin
 
 ---
 
+## Documentation
+
+| Doc | What it covers |
+|---|---|
+| [Dependencies](docs/dependencies.md) | Every package explained, external accounts required (DeepSeek, Meta, Paystack, R2) |
+| [Infrastructure](docs/infrastructure.md) | Docker Compose, PostgreSQL, Redis — setup and daily operations |
+| [Settings](docs/settings.md) | All environment variables and Django settings explained |
+| [Data Models](docs/data-models.md) | Every model, every field, relationships, and design decisions |
+| [Django Admin](docs/admin.md) | How to onboard tenants, manage products, monitor conversations and sales |
+| [Testing](docs/testing.md) | Running tests, current fixtures, patterns for writing new tests |
+
+---
+
 ## Prerequisites
 
 | Tool | Version | Install |

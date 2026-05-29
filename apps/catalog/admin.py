@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import Product, ProductMedia
-from apps.tenants.admin_site import tenant_admin
+from apps.tenants.admin_site import tenant_admin, TenantModelAdmin
 
 
 class ProductMediaInline(admin.TabularInline):
@@ -35,12 +35,31 @@ class ProductMediaAdmin(admin.ModelAdmin):
 
 # --- Tenant admin (business owners at /tenant/) ---
 
-class TenantProductAdmin(admin.ModelAdmin):
+class TenantProductMediaInline(admin.TabularInline):
+    model = ProductMedia
+    extra = 1
+    readonly_fields = ["wa_media_id"]
+    fields = ["media_type", "s3_key", "cdn_url", "sort_order", "wa_media_id"]
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
+    def has_add_permission(self, request, obj=None):
+        return True
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return True
+
+
+class TenantProductAdmin(TenantModelAdmin):
     list_display = ["name", "price_min", "price_max", "currency", "is_available", "updated_at"]
     list_filter = ["is_available", "currency"]
     search_fields = ["name", "description"]
     readonly_fields = ["created_at", "updated_at", "search_vector"]
-    inlines = [ProductMediaInline]
+    inlines = [TenantProductMediaInline]
     fieldsets = [
         (None, {"fields": ["name", "description", "is_available"]}),
         ("Pricing", {"fields": ["price_min", "price_max", "currency"]}),

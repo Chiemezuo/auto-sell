@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import PaymentLink, Sale
-from apps.tenants.admin_site import tenant_admin
+from apps.tenants.admin_site import tenant_admin, TenantModelAdmin
 
 
 # --- Platform admin (superusers at /admin/) ---
@@ -23,7 +23,7 @@ class SaleAdmin(admin.ModelAdmin):
 
 # --- Tenant admin (business owners at /tenant/) ---
 
-class TenantSaleAdmin(admin.ModelAdmin):
+class TenantSaleAdmin(TenantModelAdmin):
     list_display = ["customer_wa_id", "amount_paid", "created_at"]
     search_fields = ["customer_wa_id"]
     readonly_fields = ["id", "customer_wa_id", "amount_paid", "items_snapshot", "created_at"]

@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import NotificationLog
-from apps.tenants.admin_site import tenant_admin
+from apps.tenants.admin_site import tenant_admin, TenantModelAdmin
 
 
 # --- Platform admin (superusers at /admin/) ---
@@ -14,7 +14,7 @@ class NotificationLogAdmin(admin.ModelAdmin):
 
 # --- Tenant admin (business owners at /tenant/) ---
 
-class TenantNotificationLogAdmin(admin.ModelAdmin):
+class TenantNotificationLogAdmin(TenantModelAdmin):
     list_display = ["sale", "channel", "status", "sent_at"]
     list_filter = ["channel", "status"]
     readonly_fields = ["sale", "channel", "status", "error", "sent_at"]

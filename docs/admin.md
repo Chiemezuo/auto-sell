@@ -1,20 +1,25 @@
 # Django Admin Guide
 
-How to use the Django Admin at `http://localhost:8000/admin/` for every task the platform supports.
+There are two separate admin sites:
+
+| URL | Who uses it | What they can do |
+|---|---|---|
+| `http://localhost:8000/admin/` | Platform superusers | Everything — all tenants, all data, full control |
+| `http://localhost:8000/tenant/` | Business owners (TenantUsers) | Their own products, conversations, sales, and notifications only |
+
+The two sites share nothing. A superuser cannot log in at `/tenant/` and a TenantUser cannot log in at `/admin/`.
 
 ---
 
-## Access
+## Platform Admin (`/admin/`)
+
+### Access
 
 1. Start the dev server: `python manage.py runserver`
 2. Open `http://localhost:8000/admin/`
 3. Log in with the superuser created during setup (`python manage.py createsuperuser`)
 
-The admin is split into five sections — one per app: **Tenants**, **Catalog**, **Conversations**, **Payments**, **Notifications**.
-
 ---
-
-## Tenants
 
 ### Creating a Tenant (Onboarding a Business)
 
@@ -33,14 +38,38 @@ A Tenant represents one business on the platform. Each business gets one WhatsAp
 4. Fill in **Owner Contact**:
    - **Owner phone** — the business owner's personal WhatsApp number for sale alerts. Include country code, no `+` or spaces: `2348012345678`
    - **Owner email** — backup contact
-5. In the **Tenant Users** inline at the bottom, add a Django user for the business owner (if they need admin access). Select their user from the dropdown.
-6. Click **Save**.
+5. Click **Save**.
 
 After saving, the webhook URL for this business is:
 ```
 https://<your-domain>/api/webhooks/whatsapp/<slug>/
 ```
 Register this in Meta App Dashboard → WhatsApp → Configuration → Webhook, with the verify token you set in step 3.
+
+---
+
+### Giving a Business Owner Dashboard Access
+
+This is a two-step process: create a Django User for them, then link it to their Tenant.
+
+**Step 1 — Create the Django User:**
+1. Go to **Authentication and Authorization → Users → Add User**
+2. Set a username and password
+3. Save, then fill in their email on the next page
+4. Do **not** check "Staff status" or "Superuser status" — they should only access `/tenant/`, not `/admin/`
+
+**Step 2 — Link the user to their Tenant:**
+
+Option A — from the Tenant page:
+1. Open the tenant at **Tenants → Tenants → [their business]**
+2. Scroll to the **Tenant Users** inline at the bottom
+3. Select the user from the dropdown and save
+
+Option B — directly:
+1. Go to **Tenants → Tenant Users → Add Tenant User**
+2. Select the Tenant and the User, save
+
+Once linked, the business owner can log in at `http://localhost:8000/tenant/` with their username and password.
 
 ---
 
@@ -53,152 +82,135 @@ Everything is editable except `id` (read-only UUID). Be careful with:
 
 ---
 
-### Creating a TenantUser
+### Catalog (platform admin view)
 
-1. First, create a Django User: **Authentication and Authorization → Users → Add User**
-2. Then, go to **Tenants → Tenant Users → Add Tenant User**
-3. Select the Tenant and the User
-4. Save
-
-Alternatively, add the user inline from inside a Tenant's edit page (the **Tenant Users** section at the bottom).
+Same as the tenant admin view below, but with an additional **Tenant** field so you can assign or reassign products across businesses. Useful for bulk setup when onboarding a new client.
 
 ---
 
-## Catalog
+### Monitoring Conversations, Payments, Notifications
 
-### Adding a Product
+The platform admin sees all records across all tenants. Use the **Tenant** filter in the right sidebar to narrow down to a specific business. Refer to the field descriptions in the Tenant Dashboard section below — the fields are identical, just unscoped.
 
-1. Go to **Catalog → Products → Add Product**
-2. Fill in:
-   - **Tenant** — select the business this product belongs to
-   - **Name** — product name (e.g. "Nike Air Max 90 White")
-   - **Description** — full description. This is passed to the LLM as context, so make it detailed: include colour, size range, material, condition, etc.
-   - **Price min** — lowest acceptable price (in the chosen currency)
-   - **Price max** — highest price to start at
-   - **Currency** — default is NGN; change if needed
-   - **Is available** — checked by default; uncheck to hide from the bot without deleting
-3. Save. The **Search vector** field (visible in the Metadata section, read-only) will populate automatically within a moment via the `post_save` signal.
+---
 
-In the **Product Media** inline section, you can attach images/videos immediately or add them later.
+## Tenant Dashboard (`/tenant/`)
 
-**Important:** The bot only quotes prices within `[price_min, price_max]`. If a customer pushes for a lower price, the bot will go down to `price_min` but no further.
+### Access
+
+1. Open `http://localhost:8000/tenant/`
+2. Log in with the username and password the platform admin created for you
+
+You will only ever see data belonging to your own business. There is no way to view or modify another business's data.
+
+---
+
+### Managing Products
+
+**Products → Add Product** to add a new item to your catalog.
+
+| Field | Notes |
+|---|---|
+| **Name** | Product name, e.g. "Nike Air Max 90 White" |
+| **Description** | Full description passed to the AI. Be detailed — include colour, size range, material, condition, etc. The more detail, the better the bot answers customer questions. |
+| **Price min** | Lowest price the bot is allowed to agree to |
+| **Price max** | Starting price — the bot begins here and can come down to `price_min` if a customer negotiates |
+| **Currency** | Default is NGN. Change if needed. |
+| **Is available** | Uncheck to hide the product from the bot without deleting it |
+
+The **Tenant** field does not appear — your products are automatically assigned to your business.
+
+Save, then add images/videos in the **Product Media** section at the bottom of the page.
+
+**Important:** The bot will never quote a price below `price_min` or above `price_max`. Set these thoughtfully.
 
 ---
 
 ### Adding Product Media
 
-You can add media via the inline on the Product edit page, or directly from **Catalog → Product Medias → Add Product Media**.
+In the **Product Media** inline on the Product edit page:
 
 | Field | What to enter |
 |---|---|
-| **Product** | Select the parent product |
 | **Media type** | `image`, `video`, or `document` |
-| **S3 key** | The file path in your R2/S3 bucket, e.g. `tenants/olas-boutique/products/air-max-90/photo1.jpg` |
-| **Cdn url** | The full public URL to access the file, e.g. `https://pub-xxx.r2.dev/tenants/olas-boutique/...` |
-| **Sort order** | `0` = shown first/default. Higher numbers appear later. |
-| **Wa media id** | Leave blank. This gets filled in automatically the first time the image is sent to a customer via WhatsApp. |
-
-The `cdn_url` is what gets sent to WhatsApp's servers when uploading media. The `wa_media_id` is cached after the first upload so the file isn't re-uploaded on every send.
+| **S3 key** | File path inside your R2/S3 bucket, e.g. `tenants/my-store/products/air-max-90/photo1.jpg` |
+| **Cdn url** | Full public URL to the file, e.g. `https://pub-xxx.r2.dev/tenants/my-store/air-max-90/photo1.jpg` |
+| **Sort order** | `0` = shown first. Higher numbers appear later when a customer asks for images. |
+| **Wa media id** | Leave blank — filled automatically the first time the image is sent to a customer via WhatsApp |
 
 ---
 
 ### Editing / Disabling a Product
 
-- To temporarily hide a product from the bot: uncheck **Is available**
-- To change the price range: update `price_min` / `price_max` and save — the next conversation will use the new range
-- To delete a product: use the Delete button. This also deletes all attached `ProductMedia` records.
+- **Hide temporarily:** uncheck **Is available** — the bot stops mentioning the product immediately
+- **Change price range:** update `price_min` / `price_max` and save — takes effect on the next conversation
+- **Delete:** use the Delete button — also removes all attached media records
 
 ---
 
-## Conversations
+### Viewing Conversations
 
-The Conversations admin is **read-only** — it's for monitoring, not managing. You cannot add or delete messages from the admin.
-
-### Reading Conversation Records
-
-Go to **Conversations → Conversations**.
-
-The list view shows: customer phone number, business (tenant), current state, created time, and last message time.
+**Conversations** — read-only list of every customer chat on your WhatsApp number.
 
 **State meanings:**
 | State | Meaning |
 |---|---|
-| `active` | Customer is currently chatting; LLM is responding |
-| `awaiting_payment` | Bot sent a payment link; waiting for payment |
-| `completed` | Payment confirmed; business owner has been alerted |
-| `abandoned` | No messages for 24h after payment link was sent (set by Celery Beat — not yet built) |
+| `active` | Customer is currently chatting |
+| `awaiting_payment` | Bot sent a payment link; waiting for the customer to pay |
+| `completed` | Payment confirmed; you have been alerted |
+| `abandoned` | No activity for 24h (handled automatically) |
 
-**Filtering** by tenant, state, or date range is available in the right sidebar.
-
-### Reading Messages
-
-Click into a conversation to see all messages in the **Messages** inline at the bottom of the page.
-
-| Role | Meaning |
-|---|---|
-| `user` | Message sent by the customer |
-| `assistant` | Reply generated by the LLM and sent by the bot |
-| `system` | System-level messages (rare) |
-
-The `wa_message_id` field contains WhatsApp's unique message ID — useful for debugging duplicate processing issues.
+Click into a conversation to read the full message thread.
 
 ---
 
-## Payments
+### Viewing Sales
 
-### Reading Payment Links
-
-**Payments → Payment Links** — shows all generated payment links.
-
-Key columns: `gateway_reference` (Paystack transaction reference), `tenant`, `amount`, `status`, `created_at`, `paid_at`.
-
-**Status progression:**
-- `pending` → link was sent to customer, waiting for payment
-- `paid` → Paystack confirmed payment; a `Sale` record was created
-- `expired` → customer didn't pay in time (Paystack default TTL: 24h)
-- `failed` → charge was attempted and failed
-
-To investigate a payment, click the `gateway_reference` and look up the same reference in your Paystack dashboard.
-
-### Reading Sales
-
-**Payments → Sales** — shows confirmed sales only. A Sale is created when the Paystack `charge.success` webhook fires.
+**Sales** — confirmed payments only. A record is created here the moment Paystack confirms a charge.
 
 Key fields:
-- **Items snapshot** — JSON showing what the customer agreed to buy. Example:
-  ```json
-  [{"product_id": "abc-123", "name": "Nike Air Max 90", "agreed_price": 50000}]
-  ```
-- **Gateway payload** — the complete raw JSON from Paystack's webhook. Everything Paystack sent, preserved verbatim. Useful for disputes.
+- **Items snapshot** — what the customer agreed to buy, recorded at the time of payment
+- **Amount paid** — the final confirmed amount from Paystack
+
+The raw Paystack webhook payload is stored internally but not shown here (visible to platform admins if needed for disputes).
 
 ---
 
-## Notifications
+### Viewing Notification Logs
 
-**Notifications → Notification Logs** — shows every sale alert sent to a business owner.
+**Notification Logs** — a record of every sale alert sent to your phone.
 
 | Status | Meaning |
 |---|---|
-| `sent` | WhatsApp message was delivered successfully |
-| `failed` | Delivery failed; check the **Error** field for the exception |
-
-If a notification failed, the **Error** field shows the exception message. Common causes:
-- Invalid `owner_phone` number format
-- Expired `wa_access_token` on the Tenant
-- WhatsApp API rate limit exceeded
+| `sent` | Alert was delivered to your WhatsApp |
+| `failed` | Delivery failed — contact the platform admin if this keeps happening |
 
 ---
 
-## Admin Tips
+## How the Two Sites Are Kept Separate
 
-**Searching across models:** Use the search box at the top of list views. Fields indexed for search:
-- Tenants: `name`, `slug`, `owner_email`
-- Products: `name`, `description`
-- Conversations: `customer_wa_id`
-- Payment Links: `gateway_reference`, `conversation__customer_wa_id`
+This is handled in three places in the code:
 
-**Filtering:** The right sidebar on list views has filters for tenant, status, date ranges, etc.
+**`apps/tenants/admin_site.py`** — defines `TenantAdminSite` with a `has_permission` override:
+```python
+def has_permission(self, request):
+    return (
+        request.user.is_active
+        and not request.user.is_superuser   # superusers use /admin/
+        and hasattr(request.user, "tenant_profile")  # must be a linked TenantUser
+    )
+```
 
-**Bulk actions:** The default "Delete selected" bulk action is available on all list views. Use carefully.
+**Each app's `admin.py`** — registers two separate admin classes: one on `admin.site` (platform), one on `tenant_admin` (business owners). The tenant versions override `get_queryset` to filter by the logged-in user's tenant:
+```python
+def get_queryset(self, request):
+    return super().get_queryset(request).filter(
+        tenant=request.user.tenant_profile.tenant
+    )
+```
 
-**Keyboard shortcut:** Press `g` then `h` in the Django Admin to go back to the home page.
+**`auto_sell/urls.py`** — mounts the two sites at different paths:
+```python
+path("admin/", admin.site.urls),    # platform admins
+path("tenant/", tenant_admin.urls), # business owners
+```

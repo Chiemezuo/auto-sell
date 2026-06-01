@@ -96,6 +96,7 @@ Copy `.env.example` to `.env` and fill these in.
 | `S3_SECRET_KEY` | string | `""` | R2 or AWS Secret Access Key. |
 | `S3_BUCKET_NAME` | string | `auto-sell-media` | The bucket name in R2 or S3. |
 | `S3_REGION` | string | `auto` | `auto` for R2. AWS region (e.g. `us-east-1`) for S3. |
+| `S3_CDN_BASE_URL` | URL | `""` | Base URL for publicly accessible media files. AWS S3: `https://<bucket>.s3.<region>.amazonaws.com` (or a CloudFront domain). R2: your custom public domain or `https://pub-<hash>.r2.dev`. If left blank, `storage.py` constructs a URL automatically from the other S3 settings. |
 
 ---
 
@@ -182,6 +183,7 @@ S3_ACCESS_KEY = env("S3_ACCESS_KEY", default="")
 S3_SECRET_KEY = env("S3_SECRET_KEY", default="")
 S3_BUCKET_NAME = env("S3_BUCKET_NAME", default="")
 S3_REGION = env("S3_REGION", default="auto")
+S3_CDN_BASE_URL = env("S3_CDN_BASE_URL", default="")
 ```
 
 `DEEPSEEK_BASE_URL` and `DEEPSEEK_MODEL` are hardcoded because they're not environment-specific — if you want to use a different model, change it in code.

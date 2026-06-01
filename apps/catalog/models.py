@@ -7,7 +7,8 @@ from apps.tenants.models import Tenant
 
 class Product(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="products")
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="products")
     name = models.CharField(max_length=255)
     description = models.TextField()
     price_min = models.DecimalField(max_digits=12, decimal_places=2)
@@ -27,17 +28,23 @@ class Product(models.Model):
 
 
 class ProductMedia(models.Model):
-    MEDIA_TYPES = [("image", "Image"), ("video", "Video"), ("document", "Document")]
+    MEDIA_TYPES = [("image", "Image"), ("video", "Video"),
+                   ("document", "Document")]
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="media")
-    media_type = models.CharField(max_length=16, choices=MEDIA_TYPES, default="image")
-    s3_key = models.CharField(max_length=512, help_text="Path within the R2/S3 bucket")
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="media")
+    media_type = models.CharField(
+        max_length=16, choices=MEDIA_TYPES, default="image")
+    s3_key = models.CharField(
+        max_length=512, help_text="Path within the R2/S3 bucket")
     cdn_url = models.URLField(max_length=1024)
-    wa_media_id = models.CharField(max_length=128, blank=True, help_text="Cached after first WhatsApp upload")
+    wa_media_id = models.CharField(
+        max_length=128, blank=True, help_text="Cached after first WhatsApp upload")
     sort_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
         ordering = ["sort_order"]
+        verbose_name_plural = "Product media"
 
     def __str__(self):
         return f"{self.media_type} for {self.product.name}"

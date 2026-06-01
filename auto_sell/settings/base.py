@@ -106,6 +106,7 @@ S3_ACCESS_KEY = env("S3_ACCESS_KEY", default="")
 S3_SECRET_KEY = env("S3_SECRET_KEY", default="")
 S3_BUCKET_NAME = env("S3_BUCKET_NAME", default="")
 S3_REGION = env("S3_REGION", default="auto")
+S3_CDN_BASE_URL = env("S3_CDN_BASE_URL", default="")
 
 # DeepSeek
 DEEPSEEK_API_KEY = env("DEEPSEEK_API_KEY", default="")

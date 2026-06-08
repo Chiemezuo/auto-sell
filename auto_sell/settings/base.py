@@ -108,6 +108,9 @@ S3_BUCKET_NAME = env("S3_BUCKET_NAME", default="")
 S3_REGION = env("S3_REGION", default="auto")
 S3_CDN_BASE_URL = env("S3_CDN_BASE_URL", default="")
 
+# WhatsApp
+WA_API_BASE = env("WA_API_BASE", default="https://graph.facebook.com/v19.0")
+
 # DeepSeek
 DEEPSEEK_API_KEY = env("DEEPSEEK_API_KEY", default="")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"

@@ -87,6 +87,12 @@ Copy `.env.example` to `.env` and fill these in.
 | `PAYSTACK_SECRET_KEY` | string | For payments | `sk_test_xxx` for testing, `sk_live_xxx` for production. |
 | `PAYSTACK_PUBLIC_KEY` | string | For payments | `pk_test_xxx` for testing. Used in frontend/embed contexts if needed. |
 
+### WhatsApp
+
+| Variable | Type | Default | Notes |
+|---|---|---|---|
+| `WA_API_BASE` | URL | `https://graph.facebook.com/v19.0` | WhatsApp Cloud API base URL. Update the version segment (`v19.0`) here when Meta releases a new API version, without touching code. |
+
 ### Cloudflare R2 / S3
 
 | Variable | Type | Default | Notes |

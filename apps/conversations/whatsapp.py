@@ -1,5 +1,8 @@
+import logging
 import httpx
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class WhatsAppClient:
@@ -32,8 +35,10 @@ class WhatsAppClient:
             url,
             headers={"Authorization": self._headers["Authorization"]},
             data={"messaging_product": "whatsapp", "type": content_type},
-            files={"file": (None, file_obj, content_type)},
+            files={"file": (f"upload.{content_type.split('/')[-1]}", file_obj, content_type)},
         )
+        if not resp.is_success:
+            logger.error("WhatsApp media upload error %s: %s", resp.status_code, resp.text)
         resp.raise_for_status()
         return resp.json()["id"]
 
@@ -44,5 +49,7 @@ class WhatsAppClient:
             headers={**self._headers, "Content-Type": "application/json"},
             json=payload,
         )
+        if not resp.is_success:
+            logger.error("WhatsApp API error %s: %s", resp.status_code, resp.text)
         resp.raise_for_status()
         return resp.json()

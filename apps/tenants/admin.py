@@ -17,7 +17,7 @@ class TenantAdmin(admin.ModelAdmin):
     inlines = [TenantUserInline]
     fieldsets = [
         (None, {"fields": ["name", "slug", "is_active"]}),
-        ("WhatsApp Credentials", {"fields": ["wa_phone_number_id", "wa_business_account_id", "wa_access_token", "wa_webhook_verify_token"], "classes": ["collapse"]}),
+        ("WhatsApp Credentials", {"fields": ["wa_phone_number_id", "wa_business_account_id", "wa_access_token", "wa_app_secret", "wa_webhook_verify_token"], "classes": ["collapse"]}),
         ("Owner Contact", {"fields": ["owner_phone", "owner_email"]}),
         ("Metadata", {"fields": ["created_at"]}),
     ]

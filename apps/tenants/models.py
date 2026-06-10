@@ -13,6 +13,7 @@ class Tenant(models.Model):
     wa_phone_number_id = models.CharField(max_length=64, unique=True)
     wa_business_account_id = models.CharField(max_length=64)
     wa_access_token = models.TextField(help_text="WhatsApp Cloud API access token")
+    wa_app_secret = models.CharField(max_length=255, help_text="Meta App Secret — used to verify inbound webhook signatures")
     wa_webhook_verify_token = models.CharField(max_length=128)
 
     owner_phone = models.CharField(max_length=32, help_text="Phone number for sale alerts (with country code, e.g. 2348012345678)")

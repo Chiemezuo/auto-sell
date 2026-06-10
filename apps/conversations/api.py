@@ -3,7 +3,7 @@ import hashlib
 import json
 from ninja import Router
 from ninja.errors import HttpError
-from django.http import HttpRequest
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from apps.tenants.models import Tenant
 from .models import Message
@@ -20,7 +20,7 @@ def verify_webhook(request: HttpRequest, tenant_slug: str):
 
     tenant = get_object_or_404(Tenant, slug=tenant_slug, is_active=True)
     if hub_mode == "subscribe" and hub_verify_token == tenant.wa_webhook_verify_token:
-        return hub_challenge
+        return HttpResponse(hub_challenge, content_type="text/plain")
     raise HttpError(403, "Forbidden")
 
 
@@ -30,7 +30,7 @@ def receive_message(request: HttpRequest, tenant_slug: str):
 
     signature = request.headers.get("X-Hub-Signature-256", "")
     expected = "sha256=" + hmac.new(
-        tenant.wa_webhook_verify_token.encode(),
+        tenant.wa_app_secret.encode(),
         request.body,
         hashlib.sha256,
     ).hexdigest()

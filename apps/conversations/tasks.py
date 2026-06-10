@@ -65,15 +65,37 @@ def process_message(tenant_id: str, customer_wa_id: str, message_text: str, wa_m
 
         wa_client = WhatsAppClient(tenant)
 
+        new_history = [json.dumps(user_msg)]
+
         if assistant_msg.tool_calls:
+            new_history.append(json.dumps({
+                "role": "assistant",
+                "content": assistant_msg.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in assistant_msg.tool_calls
+                ],
+            }))
             for tool_call in assistant_msg.tool_calls:
                 _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client)
+                new_history.append(json.dumps({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": "done",
+                }))
 
         reply_text = assistant_msg.content or ""
         if reply_text:
             wa_client.send_text(customer_wa_id, reply_text)
 
-        r.rpush(history_key, json.dumps(user_msg), json.dumps({"role": "assistant", "content": reply_text}))
+        if not assistant_msg.tool_calls:
+            new_history.append(json.dumps({"role": "assistant", "content": reply_text}))
+
+        r.rpush(history_key, *new_history)
         r.ltrim(history_key, -HISTORY_MAX, -1)
         r.expire(history_key, HISTORY_TTL)
 
@@ -111,7 +133,9 @@ def _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client):
             return
         if not media.wa_media_id:
             import httpx
-            file_bytes = httpx.get(media.cdn_url).content
+            response = httpx.get(media.cdn_url, follow_redirects=True)
+            response.raise_for_status()
+            file_bytes = response.content
             content_type, _ = mimetypes.guess_type(media.s3_key)
             media.wa_media_id = wa_client.upload_media(file_bytes, content_type or "image/jpeg")
             media.save(update_fields=["wa_media_id"])

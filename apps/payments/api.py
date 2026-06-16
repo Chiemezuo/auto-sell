@@ -19,7 +19,26 @@ def paystack_webhook(request: HttpRequest):
         raise HttpError(403, "Invalid signature")
 
     payload = json.loads(request.body)
-    if payload.get("event") != "charge.success":
+    event = payload.get("event")
+
+    if event == "charge.failed":
+        data = payload.get("data", {})
+        reference = data.get("reference")
+        if reference:
+            try:
+                payment_link = PaymentLink.objects.select_related("conversation").get(
+                    gateway_reference=reference, status=PaymentLink.STATUS_PENDING
+                )
+                with transaction.atomic():
+                    payment_link.status = PaymentLink.STATUS_FAILED
+                    payment_link.save(update_fields=["status"])
+                    payment_link.conversation.state = Conversation.STATE_ACTIVE
+                    payment_link.conversation.save(update_fields=["state"])
+            except PaymentLink.DoesNotExist:
+                pass
+        return {"status": "ok"}
+
+    if event != "charge.success":
         return {"status": "ignored"}
 
     data = payload["data"]

@@ -22,25 +22,46 @@ def _redis():
     return redis.from_url(settings.REDIS_URL)
 
 
-@shared_task
-def process_message(tenant_id: str, customer_wa_id: str, message_text: str, wa_message_id: str):
+@shared_task(bind=True, max_retries=3, default_retry_delay=30)
+def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str, wa_message_id: str):
     r = _redis()
     try:
         tenant = Tenant.objects.get(id=tenant_id, is_active=True)
     except Tenant.DoesNotExist:
         return
 
-    conversation, _ = Conversation.objects.get_or_create(
+    conversation, created = Conversation.objects.get_or_create(
         tenant=tenant,
         customer_wa_id=customer_wa_id,
         defaults={"state": Conversation.STATE_ACTIVE},
     )
+    if not created and conversation.state in (
+        Conversation.STATE_COMPLETED,
+        Conversation.STATE_ABANDONED,
+    ):
+        conversation.state = Conversation.STATE_ACTIVE
+        conversation.save(update_fields=["state"])
+        r.delete(f"conversation:{conversation.id}:history")
+        r.delete(f"conversation:{conversation.id}:products")
 
     lock_key = f"conversation:{conversation.id}:lock"
     if not r.set(lock_key, "1", nx=True, ex=LOCK_TTL):
         return  # another worker is already processing this conversation
 
     try:
+        if conversation.state == Conversation.STATE_AWAITING_PAYMENT:
+            from apps.payments.models import PaymentLink
+            latest_link = conversation.payment_links.order_by("-created_at").first()
+            if latest_link and latest_link.status == PaymentLink.STATUS_PENDING:
+                WhatsAppClient(tenant).send_text(
+                    customer_wa_id,
+                    "Your payment link is still active — please complete the payment to confirm your order.",
+                )
+                return
+            # Link expired, failed, or absent — reset so the LLM can re-engage
+            conversation.state = Conversation.STATE_ACTIVE
+            conversation.save(update_fields=["state"])
+
         history_key = f"conversation:{conversation.id}:history"
         products_key = f"conversation:{conversation.id}:products"
         history = [json.loads(m) for m in r.lrange(history_key, 0, -1)]
@@ -113,8 +134,23 @@ def process_message(tenant_id: str, customer_wa_id: str, message_text: str, wa_m
             )
             conversation.last_message_at = timezone.now()
             conversation.save(update_fields=["last_message_at"])
+    except Exception as exc:
+        r.delete(lock_key)
+        raise self.retry(exc=exc)
     finally:
         r.delete(lock_key)
+
+
+@shared_task
+def reply_unsupported_message(tenant_id: str, customer_wa_id: str):
+    try:
+        tenant = Tenant.objects.get(id=tenant_id, is_active=True)
+    except Tenant.DoesNotExist:
+        return
+    WhatsAppClient(tenant).send_text(
+        customer_wa_id,
+        "Hi! I can only read text messages. Please type your question and I'll be happy to help.",
+    )
 
 
 def _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client):
@@ -142,7 +178,7 @@ def _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client):
         wa_client.send_media(customer_wa_id, media.media_type, media.wa_media_id)
 
     elif name == "generate_payment_link":
-        from apps.payments.tasks import create_payment_link  # implemented in Step 3
+        from apps.payments.tasks import create_payment_link
         create_payment_link.delay(
             conversation_id=str(conversation.id),
             items_snapshot=args.get("items_snapshot", []),

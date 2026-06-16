@@ -21,6 +21,7 @@ django-extensions==4.1
 django-ninja==1.6.2
 executing==2.2.1
 faker==40.19.1
+fakeredis==2.30.1
 gunicorn==26.0.0
 h11==0.16.0
 httpcore==1.0.9

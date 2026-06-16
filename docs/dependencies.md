@@ -127,14 +127,14 @@ The Python Redis client. Redis is used for two completely separate purposes in t
 The official OpenAI Python SDK. Used here **pointed at DeepSeek's API**, not OpenAI's, because DeepSeek is fully API-compatible with OpenAI's chat completions format.
 
 ```python
-from openai import AsyncOpenAI
+from openai import OpenAI
 
-client = AsyncOpenAI(
+client = OpenAI(
     api_key=settings.DEEPSEEK_API_KEY,
     base_url="https://api.deepseek.com/v1",
 )
 
-response = await client.chat.completions.create(
+response = client.chat.completions.create(
     model="deepseek-chat",
     messages=[...],
     tools=[...],
@@ -223,6 +223,9 @@ fake.email()          # "john@example.com"
 fake.numerify("234########")  # realistic Nigerian phone number
 fake.slug()           # "my-business-slug"
 ```
+
+### `fakeredis==2.30.1`
+In-memory Redis implementation that replaces the real Redis client in tests. Used by patching `apps.conversations.tasks._redis` so task tests run without a live Redis connection and without polluting conversation history or locks between test runs. Supports all commands used in production: `set`, `get`, `lrange`, `rpush`, `ltrim`, `expire`, `delete`.
 
 ### `ipython>=8.0`
 Enhanced interactive Python shell. Used via `python manage.py shell_plus --ipython` for:

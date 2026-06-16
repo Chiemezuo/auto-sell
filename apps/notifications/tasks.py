@@ -1,12 +1,13 @@
 from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError
 from apps.conversations.models import Conversation
 from apps.conversations.whatsapp import WhatsAppClient
 from apps.payments.models import Sale
 from .models import NotificationLog
 
 
-@shared_task
-def alert_owner(sale_id: str):
+@shared_task(bind=True, max_retries=5, default_retry_delay=60)
+def alert_owner(self, sale_id: str):
     try:
         sale = Sale.objects.select_related("tenant", "conversation", "payment_link").get(id=sale_id)
     except Sale.DoesNotExist:
@@ -37,13 +38,16 @@ def alert_owner(sale_id: str):
             status=NotificationLog.STATUS_SENT,
         )
     except Exception as exc:
-        NotificationLog.objects.create(
-            tenant=tenant,
-            sale=sale,
-            channel=NotificationLog.CHANNEL_WHATSAPP,
-            status=NotificationLog.STATUS_FAILED,
-            error=str(exc),
-        )
+        try:
+            raise self.retry(exc=exc)
+        except MaxRetriesExceededError:
+            NotificationLog.objects.create(
+                tenant=tenant,
+                sale=sale,
+                channel=NotificationLog.CHANNEL_WHATSAPP,
+                status=NotificationLog.STATUS_FAILED,
+                error=str(exc),
+            )
 
 
 @shared_task

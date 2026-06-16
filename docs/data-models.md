@@ -71,8 +71,9 @@ Represents one business using the platform. Every piece of data belongs to exact
 | `slug` | `SlugField` (unique) | URL-safe identifier, e.g. `olas-boutique`. **This is used in the WhatsApp webhook URL:** `/api/webhooks/whatsapp/olas-boutique/`. Must be unique across all tenants. Auto-populated from `name` in Django Admin. |
 | `wa_phone_number_id` | `CharField(64)` (unique) | From Meta's App Dashboard. Identifies which WhatsApp number to send messages from. Each tenant gets exactly one number. |
 | `wa_business_account_id` | `CharField(64)` | The WhatsApp Business Account ID from Meta. Used when making certain API calls. |
-| `wa_access_token` | `TextField` | The long-lived (or permanent System User) access token from Meta. Used as the `Authorization: Bearer <token>` header in all outbound WhatsApp API calls. ⚠️ **Store securely** — field-level encryption is a planned Phase 7 item. |
-| `wa_webhook_verify_token` | `CharField(128)` | A random string you create and register in Meta's App Dashboard. Meta sends this back in `GET` requests to verify the webhook URL is yours. Example: `my-random-string-abc123`. |
+| `wa_access_token` | `TextField` | The long-lived (or permanent System User) access token from Meta. Used as the `Authorization: Bearer <token>` header in all outbound WhatsApp API calls. ⚠️ **Store securely** — field-level encryption is a planned item. |
+| `wa_app_secret` | `CharField(255)` | The Meta App Secret (from Meta App Dashboard → App Settings → Basic). Used to verify the `X-Hub-Signature-256` HMAC-SHA256 header on every inbound webhook `POST`. Without this check, anyone could send fake webhook payloads. |
+| `wa_webhook_verify_token` | `CharField(128)` | A random string you create and register in Meta's App Dashboard. Meta sends this back in `GET` requests to verify the webhook URL is yours. Distinct from `wa_app_secret` — this is for the one-time URL verification handshake, not per-request signature checking. |
 | `owner_phone` | `CharField(32)` | The business owner's personal phone number (with country code, e.g. `2348012345678`). Sale alerts are sent here via WhatsApp. |
 | `owner_email` | `EmailField` | Owner's email — backup contact, not used for automated alerts in MVP. |
 | `is_active` | `BooleanField` (default `True`) | Platform admins can set this to `False` to disable a business without deleting its data. Inactive tenants should not process incoming messages. |
@@ -160,28 +161,37 @@ One thread between a customer and a business over WhatsApp. There can only be **
 | `state` | `CharField` | State machine — see below. |
 | `context_summary` | `TextField` | Written by the LLM when a conversation ends (`completed` or `abandoned`). A short summary of what the customer wanted and what happened. Useful for analytics and re-engagement. Blank while active. |
 | `created_at` | `DateTimeField` (auto) | When the first message was received. |
-| `last_message_at` | `DateTimeField` (auto_now_add) | Updated on each new message. Used by the Celery Beat periodic task to detect abandoned conversations (24h of inactivity). ⚠️ This field needs to be updated with `update_fields=["last_message_at"]` — `auto_now` was avoided deliberately because we want to set it manually from the Celery task. |
+| `last_message_at` | `DateTimeField` (auto_now_add) | Updated on each new message via `update_fields=["last_message_at"]` in the Celery task. `auto_now` was avoided deliberately so the field can be set manually. Intended for use by a future Celery Beat periodic task that marks conversations as `abandoned` after 24h of inactivity (Phase 7). |
 
 **State machine transitions:**
 
 ```
           receive message
 [NEW] ──────────────────────► [active]
-                                  │
-                    LLM calls     │
-                generate_payment  │
-                    _link tool    │
-                                  ▼
+                                  │  ▲
+                    LLM calls     │  │ receive message after
+                generate_payment  │  │ completed/abandoned
+                    _link tool    │  │ (state reset + Redis cleared)
+                                  ▼  │
                          [awaiting_payment]
-                                  │
-              ┌───────────────────┴──────────────┐
-              │ Paystack webhook                  │ 24h inactivity
-              │ charge.success                    │ (Celery Beat)
-              ▼                                   ▼
-          [completed]                        [abandoned]
+                            │         │
+    receive message         │         │ receive message
+    + link PENDING          │         │ + link expired/failed/absent
+    (reminder sent,         │         │ (state reset to active;
+    LLM not called)         │         │  LLM re-engages)
+                            │         │
+      ┌─────────────────────┘         └──────────────────────► [active] (loop)
+      │
+      │  Paystack charge.success webhook         24h inactivity
+      │                                          (Celery Beat — Phase 7)
+      ▼                                          ▼
+  [completed]                               [abandoned]
+
+  Note: Paystack charge.failed webhook → marks PaymentLink STATUS_FAILED
+  and immediately resets conversation to [active] (same path as link expired).
 ```
 
-**`unique_together = [("tenant", "customer_wa_id")]`** — prevents two `Conversation` rows for the same customer+tenant pair. Without this, re-opening a conversation after completion would create a second row rather than reusing the first. In practice, when a conversation is `completed` or `abandoned`, the next message from the same customer creates a new row (the constraint only fires if both rows have the same `state`). Actually, in the current schema, `unique_together` means a customer can never have more than one row at all — if you need to support repeat customers, you'll need to rethink this in v2. For MVP this is acceptable.
+**`unique_together = [("tenant", "customer_wa_id")]`** — one row per customer per tenant, ever. When a returning customer messages after a `completed` or `abandoned` conversation, `process_message` detects the terminal state, resets it to `active`, and deletes the stale Redis history and product cache before processing continues. This keeps the schema simple (no new rows, no FK changes) while giving returning customers a fresh session.
 
 ---
 
@@ -226,10 +236,22 @@ A Paystack payment link generated when the LLM detects buy intent. One conversat
 
 **Status lifecycle:**
 ```
-[pending] ──── Paystack charge.success webhook ────► [paid]
-[pending] ──── Link expires (Paystack default: 24h) ► [expired]  (set manually)
-[pending] ──── Charge fails / user cancels ─────────► [failed]   (set on webhook)
+[pending] ──── Paystack charge.success webhook ────────────────► [paid]
+[pending] ──── Link expires (Paystack default: 24h) ────────────► [expired]
+               (set lazily: detected when next customer message arrives)
+[pending] ──── Paystack charge.failed webhook ──────────────────► [failed]
+               (set proactively: webhook handler marks link + resets conversation)
 ```
+
+**How expiry is handled (Option A — passive detection):**
+
+Paystack payment links expire after 24 hours by default (no configurable TTL in the API). Rather than polling Paystack for link status, expiry is detected passively:
+
+1. When a customer messages during `awaiting_payment`, the task checks the most recent `PaymentLink.status`.
+2. If `STATUS_PENDING` → the link is still active; send a reminder and return early (LLM not called).
+3. If `STATUS_EXPIRED`, `STATUS_FAILED`, or no link exists → the link is no longer actionable; reset `conversation.state` to `active` and let the LLM re-engage so the customer can renegotiate.
+
+For **failed charges** (e.g., card declined), the Paystack `charge.failed` webhook arrives immediately. The webhook handler marks the link `STATUS_FAILED` and resets the conversation to `active` proactively — no need to wait for the customer's next message.
 
 ---
 

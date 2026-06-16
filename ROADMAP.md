@@ -17,7 +17,7 @@
 
 ---
 
-## Phase 2 — Tenants App (models done, encryption pending)
+## Phase 2 — Tenants App ✅
 
 - [x] App created at `apps/tenants/`
 - [x] Create `Tenant` model (UUID PK, slug, WhatsApp credentials, owner contact, `is_active`)
@@ -28,91 +28,101 @@
 
 ---
 
-## Phase 3 — Catalog App (models done, services pending)
+## Phase 3 — Catalog App ✅
 
 - [x] App created at `apps/catalog/`
 - [x] Create `Product` model (UUID, tenant FK, name, description, price_min, price_max, currency, is_available, `search_vector`)
 - [x] Create `ProductMedia` model (product FK, media_type, s3_key, cdn_url, wa_media_id, sort_order)
 - [x] Add GIN index on `search_vector`
 - [x] Wire `post_save` signal to update `search_vector` on Product save
-- [ ] Create `apps/catalog/storage.py` — boto3 S3/R2 client, `upload_product_media()`, `generate_presigned_url()`
-- [ ] Create `apps/catalog/search.py` — `get_relevant_products(tenant_id, query_text, limit=5)`
-- [ ] Add Django Ninja endpoint for media upload (`POST /api/catalog/products/{id}/media/`)
+- [x] Create `apps/catalog/storage.py` — boto3 S3/R2 client, `upload_product_media()`
+- [x] Create `apps/catalog/search.py` — `get_relevant_products(tenant_id, query_text, limit=5)`
+- [x] Add Django Ninja endpoint for media upload (`POST /api/catalog/products/{id}/media/`)
 - [x] Register Product and ProductMedia in Django Admin (with inline media)
 - [x] Write and run migrations
-- [ ] Set up first catalog tests
+- [ ] Write catalog tests (FTS search, search_vector signal, media upload)
 
 ---
 
-## Phase 4 — Conversations App + WhatsApp Webhook (models done, logic pending)
+## Phase 4 — Conversations App + WhatsApp Webhook ✅
 
 - [x] App created at `apps/conversations/`
 - [x] Create `Conversation` model (UUID, tenant FK, customer_wa_id, state, context_summary; `unique_together = (tenant, customer_wa_id)`)
 - [x] Create `Message` model (conversation FK, role, content, wa_message_id)
-- [ ] Create `apps/conversations/whatsapp.py` — `WhatsAppClient` with `send_text()`, `send_media()`, `upload_media()`
-- [ ] Create `apps/conversations/llm.py` — DeepSeek client (`openai` SDK, `base_url=https://api.deepseek.com/v1`)
-- [ ] Create `apps/conversations/prompts.py` — system prompt assembly (3-part: rules + catalog context + tool defs)
-- [ ] Create Celery task `process_message`:
-  - [ ] Acquire Redis lock (`conversation:{uuid}:lock`, TTL 30s)
-  - [ ] Load/create `Conversation`; load history from Redis list
-  - [ ] Run FTS catalog search for inbound message terms
-  - [ ] Assemble system prompt; call DeepSeek with tools
-  - [ ] Parse `tool_calls`: dispatch `send_product_media`, `generate_payment_link`, `escalate_to_human`
-  - [ ] Send reply via `WhatsAppClient`
-  - [ ] Append assistant message to Redis list (sliding window, max 20)
-- [ ] Create Django Ninja webhook endpoint `POST /api/webhooks/whatsapp/{tenant_slug}/`:
-  - [ ] Verify `X-Hub-Signature-256`
-  - [ ] Idempotency check via `Message.wa_message_id`
-  - [ ] Persist inbound message, enqueue `process_message`, return 200
-- [ ] Handle Meta webhook verification (`GET` with `hub.challenge`)
+- [x] Create `apps/conversations/whatsapp.py` — `WhatsAppClient` with `send_text()`, `send_media()`, `upload_media()`
+- [x] Create `apps/conversations/llm.py` — DeepSeek client (`openai` SDK, `base_url=https://api.deepseek.com/v1`)
+- [x] Create `apps/conversations/prompts.py` — system prompt assembly (3-part: rules + catalog context + tool defs)
+- [x] Create Celery task `process_message`:
+  - [x] Acquire Redis lock (`conversation:{uuid}:lock`, TTL 30s)
+  - [x] Returning-customer re-open: reset state + clear Redis history/products cache if `completed`/`abandoned`
+  - [x] Awaiting-payment guard: send reminder + return early if `awaiting_payment`
+  - [x] Load/create `Conversation`; load history from Redis list
+  - [x] Run FTS catalog search for inbound message terms; cache matched product IDs
+  - [x] Assemble system prompt; call DeepSeek with tools
+  - [x] Parse `tool_calls`: dispatch `send_product_media`, `generate_payment_link`, `escalate_to_human`
+  - [x] Send reply via `WhatsAppClient`
+  - [x] Append messages to Redis list (sliding window, max 20)
+  - [x] Retry up to 3× on transient failures (30s delay); release lock before retry
+- [x] Create Django Ninja webhook endpoint `POST /api/webhooks/whatsapp/{tenant_slug}/`:
+  - [x] Verify `X-Hub-Signature-256` against `tenant.wa_app_secret`
+  - [x] Idempotency check via `Message.wa_message_id`
+  - [x] Non-text messages dispatch `reply_unsupported_message` task
+  - [x] Persist inbound message, enqueue `process_message`, return 200
+- [x] Create `reply_unsupported_message` task — sends polite "text only" reply for non-text inbound
+- [x] Handle Meta webhook verification (`GET` with `hub.challenge`)
 - [x] Write and run migrations
-- [ ] Write tests for prompt assembly and tool call parsing
+- [x] Write webhook tests (verification, deduplication, signature rejection, non-text dispatch)
+- [x] Write task tests (lock, returning-customer reset, awaiting-payment guard)
 
 ---
 
-## Phase 5 — Payments App (models done, gateway logic pending)
+## Phase 5 — Payments App ✅
 
 - [x] App created at `apps/payments/`
-- [ ] Create `PaymentGateway` ABC in `apps/payments/gateways/base.py` (`initialize_transaction()`, `verify_webhook_signature()`)
-- [ ] Create `apps/payments/gateways/paystack.py` implementing the ABC
+- [x] Create `PaymentGateway` ABC in `apps/payments/gateways/base.py` (`initialize_transaction()`, `verify_webhook_signature()`)
+- [x] Create `apps/payments/gateways/paystack.py` implementing the ABC
 - [x] Create `PaymentLink` model (UUID, conversation FK, tenant FK, amount, currency, gateway, gateway_reference, payment_url, status, paid_at)
 - [x] Create `Sale` model (OneToOne to PaymentLink, customer_wa_id, amount_paid, items_snapshot JSONField, gateway_payload JSONField)
-- [ ] Create Celery task `create_payment_link(conversation_id, product_id, agreed_price)`:
-  - [ ] Validate price within product range
-  - [ ] Call Paystack initialize transaction
-  - [ ] Save `PaymentLink`, send URL to customer via WA
-  - [ ] Set `Conversation.state = "awaiting_payment"`
-- [ ] Create Django Ninja endpoint `POST /api/payments/paystack/webhook/`:
-  - [ ] Verify `X-Paystack-Signature` HMAC
-  - [ ] On `charge.success`: update `PaymentLink`, create `Sale`, update `Conversation.state = "completed"`
-  - [ ] Enqueue `alert_owner` and `send_confirmation` tasks
+- [x] Create Celery task `create_payment_link(conversation_id, items_snapshot, agreed_price)`:
+  - [x] Call Paystack initialize transaction
+  - [x] Save `PaymentLink`, send URL to customer via WA
+  - [x] Set `Conversation.state = "awaiting_payment"`
+- [x] Create Django Ninja endpoint `POST /api/payments/paystack/webhook/`:
+  - [x] Verify `X-Paystack-Signature` HMAC-SHA512
+  - [x] On `charge.success`: update `PaymentLink`, create `Sale`, update `Conversation.state = "completed"`
+  - [x] On `charge.failed`: mark `PaymentLink → STATUS_FAILED`, reset `Conversation.state = "active"` (proactive expiry handling)
+  - [x] Idempotency guard on `gateway_reference`
+  - [x] Enqueue `alert_owner` and `send_confirmation` tasks
 - [x] Register PaymentLink and Sale in Django Admin
 - [x] Write and run migrations
-- [ ] Write tests for Paystack signature verification and payment flow
+- [x] Write Paystack webhook tests (sale creation, idempotency, signature rejection, event filtering, charge.failed handling)
+- [x] Link-status guard in `process_message`: if `awaiting_payment` + link `pending` → reminder; if `expired`/`failed`/absent → reset to `active` so LLM re-engages
+- [ ] Write `create_payment_link` task tests (price validation, Paystack API call, state transition)
 
 ---
 
-## Phase 6 — Notifications App (models done, tasks pending)
+## Phase 6 — Notifications App ✅
 
 - [x] App created at `apps/notifications/`
-- [x] Create `NotificationLog` model (tenant FK, sale FK, channel, status, sent_at)
-- [ ] Create Celery task `alert_owner(sale_id)`:
-  - [ ] Send WhatsApp message to `tenant.owner_phone` with sale summary
-  - [ ] Log to `NotificationLog`
-- [ ] Create Celery task `send_confirmation(conversation_id)`:
-  - [ ] Send WhatsApp confirmation to customer
+- [x] Create `NotificationLog` model (tenant FK, sale FK, channel, status, error, sent_at)
+- [x] Create Celery task `alert_owner(sale_id)`:
+  - [x] Send WhatsApp message to `tenant.owner_phone` with sale summary
+  - [x] Log `STATUS_SENT` to `NotificationLog` on success
+  - [x] Retry up to 5× on transient failures (60s delay); log `STATUS_FAILED` only on exhaustion
+- [x] Create Celery task `send_confirmation(conversation_id)`:
+  - [x] Send WhatsApp confirmation to customer
 - [x] Write and run migrations
 
 ---
 
-## Phase 7 — Hardening
+## Phase 7 — Hardening (in progress)
 
 - [ ] Add Redis counter for per-customer rate limiting in `process_message`
-- [ ] Create Celery Beat periodic task: mark `Conversation.state = "abandoned"` after 24h inactivity
+- [ ] Create Celery Beat periodic task: mark `Conversation.state = "abandoned"` after 24h of `last_message_at` inactivity
 - [ ] Add `django-axes` or similar for admin brute-force protection
 - [ ] Validate all WhatsApp payload fields with Pydantic schemas (Django Ninja)
 - [ ] Add `structlog` or Django logging config for Celery task visibility
-- [ ] Write integration tests for the full webhook → LLM → reply flow (mock DeepSeek and WA APIs)
+- [ ] Write `create_payment_link` task tests and catalog FTS tests
 
 ---
 
@@ -140,3 +150,4 @@
 - [ ] Multi-currency per product
 - [ ] LangGraph for multi-step agentic flows
 - [ ] Sub-accounts / multiple WA numbers per tenant
+- [ ] Field-level encryption for `wa_access_token` (Phase 2 carry-over)

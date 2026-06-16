@@ -199,13 +199,13 @@ Via Django Admin (`/admin/catalog/product/`):
 
 ```bash
 # All tests
-pytest apps/ -v
+pytest tests/ apps/ -v
 
-# A specific app
-pytest apps/catalog/ -v
+# A specific test directory
+pytest tests/conversations/ -v
 
 # With coverage
-pytest apps/ -v --cov=apps --cov-report=term-missing
+pytest tests/ apps/ --cov=apps --cov-report=term-missing
 ```
 
 ---

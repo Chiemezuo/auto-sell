@@ -132,9 +132,9 @@ Then stop any other Redis first: `docker stop <redis-container-name>`.
 
 | Key pattern | Type | TTL | Contents |
 |---|---|---|---|
-| `conversation:{uuid}:history` | List | 72 hours | JSON-serialised message dicts `[{"role": "user", "content": "..."}]` |
-| `conversation:{uuid}:lock` | String | 30 seconds | `"1"` — presence of this key means a worker is processing this conversation |
-| `tenant:{slug}:system_prompt_cache` | String | 1 hour | Pre-assembled system prompt base (without dynamic catalog context) |
+| `conversation:{uuid}:history` | List | 72 hours | JSON-serialised message dicts `[{"role": "user", "content": "..."}]`, capped at 20 entries (sliding window via `ltrim`) |
+| `conversation:{uuid}:lock` | String | 30 seconds | `"1"` — presence of this key means a worker is processing this conversation. Deleted on task completion or before a retry. |
+| `conversation:{uuid}:products` | String | 72 hours | JSON array of `Product` UUID strings matched by FTS on the most recent message. Reused on follow-up messages that don't match any new products. Cleared when a returning customer resets a completed conversation. |
 | `celery-task-meta-*` | String | Celery default | Celery task result storage |
 
 ### Inspecting Redis manually

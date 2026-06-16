@@ -7,7 +7,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404
 from apps.tenants.models import Tenant
 from .models import Message
-from .tasks import process_message
+from .tasks import process_message, reply_unsupported_message
 
 router = Router(tags=["Webhooks"])
 
@@ -43,7 +43,8 @@ def receive_message(request: HttpRequest, tenant_slug: str):
             value = change.get("value", {})
             for message in value.get("messages", []):
                 if message.get("type") != "text":
-                    continue  # non-text messages (images, audio, etc.) not handled yet
+                    reply_unsupported_message.delay(str(tenant.id), message["from"])
+                    continue
 
                 wa_message_id = message["id"]
                 if Message.objects.filter(wa_message_id=wa_message_id).exists():

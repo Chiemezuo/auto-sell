@@ -117,8 +117,8 @@
 
 ## Phase 7 — Hardening (in progress)
 
-- [ ] Add Redis counter for per-customer rate limiting in `process_message`
-- [ ] Create Celery Beat periodic task: mark `Conversation.state = "abandoned"` after 24h of `last_message_at` inactivity
+- [x] Add Redis counter for per-customer rate limiting in `process_message`
+- [x] Create Celery Beat periodic task: mark `Conversation.state = "abandoned"` after 24h of `last_message_at` inactivity (also sweeps `awaiting_payment` after 48h)
 - [ ] Add `django-axes` or similar for admin brute-force protection
 - [ ] Validate all WhatsApp payload fields with Pydantic schemas (Django Ninja)
 - [ ] Add `structlog` or Django logging config for Celery task visibility

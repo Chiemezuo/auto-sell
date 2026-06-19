@@ -79,6 +79,14 @@ CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
 
+from celery.schedules import crontab  # noqa: E402
+CELERY_BEAT_SCHEDULE = {
+    "sweep-abandoned-conversations": {
+        "task": "apps.conversations.tasks.sweep_abandoned_conversations",
+        "schedule": crontab(minute=0),  # every hour on the hour
+    },
+}
+
 # Static files
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"

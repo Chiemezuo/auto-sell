@@ -43,7 +43,7 @@ Tests live in `tests/` (project-level, organised by app) and any `tests.py` / `t
 
 ## Current Test Suite
 
-19 tests across three modules, all passing.
+28 tests across three modules, all passing.
 
 ### `tests/conversations/test_webhooks.py` — 6 tests
 
@@ -58,9 +58,9 @@ These test the Django Ninja endpoint at `POST /api/webhooks/whatsapp/{tenant_slu
 | `test_receive_message_invalid_signature_returns_403` | A tampered `X-Hub-Signature-256` is rejected |
 | `test_non_text_message_enqueues_reply_unsupported` | An image/audio message dispatches `reply_unsupported_message.delay` with the right arguments |
 
-### `tests/conversations/test_tasks.py` — 8 tests
+### `tests/conversations/test_tasks.py` — 17 tests
 
-These call `process_message.apply()` and `reply_unsupported_message.apply()` synchronously (no broker needed), with Redis replaced by `fakeredis` and external calls mocked.
+These call `process_message.apply()`, `reply_unsupported_message.apply()`, and `sweep_abandoned_conversations.apply()` synchronously (no broker needed), with Redis replaced by `fakeredis` and external calls mocked.
 
 | Test | What it checks |
 |---|---|
@@ -72,6 +72,15 @@ These call `process_message.apply()` and `reply_unsupported_message.apply()` syn
 | `test_awaiting_payment_resets_when_link_failed` | `STATE_AWAITING_PAYMENT` + a `STATUS_FAILED` link → resets to `active`; LLM is called |
 | `test_awaiting_payment_resets_when_no_link` | `STATE_AWAITING_PAYMENT` + no link → resets to `active`; LLM is called |
 | `test_reply_unsupported_message_sends_text` | `reply_unsupported_message` sends a text that mentions "text" |
+| `test_rate_limit_under_threshold_passes_through` | A customer at 9/10 messages is not blocked; LLM is called normally |
+| `test_rate_limit_over_threshold_blocks_llm_and_sends_reply` | A customer at 10/10 messages is blocked; LLM not called; "slow down" reply sent |
+| `test_rate_limit_ttl_set_on_first_hit` | The rate key has a positive TTL after the first message (window started) |
+| `test_unsupported_message_rate_limited_returns_silently` | `reply_unsupported_message` drops silently when over the rate limit (no WA send) |
+| `test_sweep_active_over_24h_becomes_abandoned` | An `active` conversation idle for 25h is marked `abandoned` by the sweep |
+| `test_sweep_active_within_24h_untouched` | An `active` conversation idle for less than 24h is not touched |
+| `test_sweep_awaiting_payment_over_48h_becomes_abandoned` | An `awaiting_payment` conversation idle for 49h is marked `abandoned` |
+| `test_sweep_awaiting_payment_within_48h_untouched` | An `awaiting_payment` conversation idle for 25h is not touched |
+| `test_sweep_completed_conversations_not_touched` | A `completed` conversation is never touched regardless of age |
 
 ### `tests/payments/test_webhook.py` — 5 tests
 

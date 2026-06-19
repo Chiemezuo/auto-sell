@@ -2,6 +2,7 @@ import json
 import mimetypes
 import redis
 from celery import shared_task
+from datetime import timedelta
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -16,6 +17,16 @@ from .prompts import build_system_prompt, TOOLS
 HISTORY_TTL = 72 * 3600
 HISTORY_MAX = 20
 LOCK_TTL = 30
+RATE_LIMIT_MAX = 10
+RATE_LIMIT_WINDOW = 60  # seconds
+
+
+def _check_rate_limit(r, tenant_id: str, customer_wa_id: str) -> bool:
+    rate_key = f"rate:{tenant_id}:{customer_wa_id}"
+    count = r.incr(rate_key)
+    if count == 1:
+        r.expire(rate_key, RATE_LIMIT_WINDOW)
+    return count > RATE_LIMIT_MAX
 
 
 def _redis():
@@ -25,6 +36,16 @@ def _redis():
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
 def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str, wa_message_id: str):
     r = _redis()
+    if _check_rate_limit(r, tenant_id, customer_wa_id):
+        try:
+            tenant = Tenant.objects.get(id=tenant_id, is_active=True)
+        except Tenant.DoesNotExist:
+            return
+        WhatsAppClient(tenant).send_text(
+            customer_wa_id,
+            "You're sending messages too fast. Please wait a moment and try again.",
+        )
+        return
     try:
         tenant = Tenant.objects.get(id=tenant_id, is_active=True)
     except Tenant.DoesNotExist:
@@ -143,6 +164,9 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
 
 @shared_task
 def reply_unsupported_message(tenant_id: str, customer_wa_id: str):
+    r = _redis()
+    if _check_rate_limit(r, tenant_id, customer_wa_id):
+        return  # silent drop — sending another reply would worsen the spam
     try:
         tenant = Tenant.objects.get(id=tenant_id, is_active=True)
     except Tenant.DoesNotExist:
@@ -151,6 +175,20 @@ def reply_unsupported_message(tenant_id: str, customer_wa_id: str):
         customer_wa_id,
         "Hi! I can only read text messages. Please type your question and I'll be happy to help.",
     )
+
+
+@shared_task
+def sweep_abandoned_conversations():
+    now = timezone.now()
+    Conversation.objects.filter(
+        state=Conversation.STATE_ACTIVE,
+        last_message_at__lt=now - timedelta(hours=24),
+    ).update(state=Conversation.STATE_ABANDONED)
+
+    Conversation.objects.filter(
+        state=Conversation.STATE_AWAITING_PAYMENT,
+        last_message_at__lt=now - timedelta(hours=48),
+    ).update(state=Conversation.STATE_ABANDONED)
 
 
 def _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client):

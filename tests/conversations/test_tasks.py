@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 from django.utils import timezone
 from apps.conversations.models import Conversation
 from apps.conversations.tasks import process_message, reply_unsupported_message, sweep_abandoned_conversations
+from apps.notifications.tasks import notify_owner_escalation
 
 
 @pytest.mark.django_db
@@ -302,3 +303,67 @@ def test_sweep_completed_conversations_not_touched(tenant, conversation):
 
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_COMPLETED
+
+
+# ---------------------------------------------------------------------------
+# Escalation
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_escalated_conversation_is_silent(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    conversation.state = Conversation.STATE_ESCALATED
+    conversation.save()
+
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "Hello?",
+        "wa_message_id": "msg_escalated_1",
+    })
+
+    mock_chat.assert_not_called()
+    mock_whatsapp.send_text.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_escalation_tool_sets_state_and_notifies_owner(
+    tenant, conversation, fake_redis, mock_chat, mock_whatsapp, monkeypatch
+):
+    tool_call = MagicMock()
+    tool_call.id = "tc_esc_1"
+    tool_call.function.name = "escalate_to_human"
+    tool_call.function.arguments = '{"reason": "customer wants a refund"}'
+
+    mock_chat.return_value.choices[0].message.content = None
+    mock_chat.return_value.choices[0].message.tool_calls = [tool_call]
+
+    mock_notify = MagicMock()
+    monkeypatch.setattr("apps.notifications.tasks.notify_owner_escalation", mock_notify)
+
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "I want a refund",
+        "wa_message_id": "msg_escalated_2",
+    })
+
+    conversation.refresh_from_db()
+    assert conversation.state == Conversation.STATE_ESCALATED
+    mock_notify.delay.assert_called_once_with(str(conversation.id), "customer wants a refund")
+
+
+@pytest.mark.django_db
+def test_notify_owner_escalation_sends_whatsapp(tenant, conversation, monkeypatch):
+    mock_client = MagicMock()
+    monkeypatch.setattr("apps.notifications.tasks.WhatsAppClient", lambda t: mock_client)
+
+    notify_owner_escalation.apply(kwargs={
+        "conversation_id": str(conversation.id),
+        "reason": "customer wants a refund",
+    })
+
+    mock_client.send_text.assert_called_once()
+    recipient, message = mock_client.send_text.call_args[0]
+    assert recipient == tenant.owner_phone
+    assert conversation.customer_wa_id in message
+    assert "customer wants a refund" in message

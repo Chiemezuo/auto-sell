@@ -50,6 +50,25 @@ def alert_owner(self, sale_id: str):
             )
 
 
+@shared_task(bind=True, max_retries=5, default_retry_delay=60)
+def notify_owner_escalation(self, conversation_id: str, reason: str):
+    from apps.conversations.models import Conversation
+    try:
+        conversation = Conversation.objects.select_related("tenant").get(id=conversation_id)
+    except Conversation.DoesNotExist:
+        return
+    tenant = conversation.tenant
+    message = (
+        f"A customer ({conversation.customer_wa_id}) has requested to speak with a human.\n"
+        f"Reason: {reason or 'Not specified'}\n"
+        f"Please follow up with them directly on WhatsApp."
+    )
+    try:
+        WhatsAppClient(tenant).send_text(tenant.owner_phone, message)
+    except Exception as exc:
+        raise self.retry(exc=exc)
+
+
 @shared_task
 def send_confirmation(conversation_id: str):
     try:

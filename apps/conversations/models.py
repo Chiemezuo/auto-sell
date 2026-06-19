@@ -8,11 +8,13 @@ class Conversation(models.Model):
     STATE_AWAITING_PAYMENT = "awaiting_payment"
     STATE_COMPLETED = "completed"
     STATE_ABANDONED = "abandoned"
+    STATE_ESCALATED = "escalated"
     STATES = [
         (STATE_ACTIVE, "Active"),
         (STATE_AWAITING_PAYMENT, "Awaiting Payment"),
         (STATE_COMPLETED, "Completed"),
         (STATE_ABANDONED, "Abandoned"),
+        (STATE_ESCALATED, "Escalated"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)

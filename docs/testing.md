@@ -43,7 +43,7 @@ Tests live in `tests/` (project-level, organised by app) and any `tests.py` / `t
 
 ## Current Test Suite
 
-28 tests across three modules, all passing.
+31 tests across three modules, all passing.
 
 ### `tests/conversations/test_webhooks.py` — 6 tests
 
@@ -58,7 +58,7 @@ These test the Django Ninja endpoint at `POST /api/webhooks/whatsapp/{tenant_slu
 | `test_receive_message_invalid_signature_returns_403` | A tampered `X-Hub-Signature-256` is rejected |
 | `test_non_text_message_enqueues_reply_unsupported` | An image/audio message dispatches `reply_unsupported_message.delay` with the right arguments |
 
-### `tests/conversations/test_tasks.py` — 17 tests
+### `tests/conversations/test_tasks.py` — 20 tests
 
 These call `process_message.apply()`, `reply_unsupported_message.apply()`, and `sweep_abandoned_conversations.apply()` synchronously (no broker needed), with Redis replaced by `fakeredis` and external calls mocked.
 
@@ -81,6 +81,9 @@ These call `process_message.apply()`, `reply_unsupported_message.apply()`, and `
 | `test_sweep_awaiting_payment_over_48h_becomes_abandoned` | An `awaiting_payment` conversation idle for 49h is marked `abandoned` |
 | `test_sweep_awaiting_payment_within_48h_untouched` | An `awaiting_payment` conversation idle for 25h is not touched |
 | `test_sweep_completed_conversations_not_touched` | A `completed` conversation is never touched regardless of age |
+| `test_escalated_conversation_is_silent` | A message on an `escalated` conversation produces no LLM call and no WhatsApp reply |
+| `test_escalation_tool_sets_state_and_notifies_owner` | LLM calling `escalate_to_human` sets state to `escalated` and enqueues `notify_owner_escalation` with the reason |
+| `test_notify_owner_escalation_sends_whatsapp` | `notify_owner_escalation` sends a WhatsApp message to `owner_phone` containing the customer ID and reason |
 
 ### `tests/payments/test_webhook.py` — 5 tests
 

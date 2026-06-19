@@ -70,6 +70,9 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
         return  # another worker is already processing this conversation
 
     try:
+        if conversation.state == Conversation.STATE_ESCALATED:
+            return  # human has taken over — bot stays silent
+
         if conversation.state == Conversation.STATE_AWAITING_PAYMENT:
             from apps.payments.models import PaymentLink
             latest_link = conversation.payment_links.order_by("-created_at").first()
@@ -228,3 +231,7 @@ def _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client):
             customer_wa_id,
             "Let me connect you with our team. Someone will be in touch shortly.",
         )
+        conversation.state = Conversation.STATE_ESCALATED
+        conversation.save(update_fields=["state"])
+        from apps.notifications.tasks import notify_owner_escalation
+        notify_owner_escalation.delay(str(conversation.id), args.get("reason", ""))

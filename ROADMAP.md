@@ -119,22 +119,24 @@
 
 - [x] Add Redis counter for per-customer rate limiting in `process_message`
 - [x] Create Celery Beat periodic task: mark `Conversation.state = "abandoned"` after 24h of `last_message_at` inactivity (also sweeps `awaiting_payment` after 48h)
-- [ ] Add `django-axes` or similar for admin brute-force protection
-- [ ] Validate all WhatsApp payload fields with Pydantic schemas (Django Ninja)
-- [ ] Add `structlog` or Django logging config for Celery task visibility
-- [ ] Write `create_payment_link` task tests and catalog FTS tests
+- [x] Add `django-axes` for admin brute-force protection (5 failures → 1h lockout)
+- [x] Validate all WhatsApp payload fields with Pydantic schemas (`apps/conversations/schemas.py`)
+- [x] Add Django logging config for Celery task visibility (`LOGGING` in `settings/base.py`)
+- [x] Write `create_payment_link` task tests and catalog FTS tests
 
 ---
 
-## Phase 8 — Deployment
+## Phase 8 — Deployment (EC2 + Coolify)
 
-- [ ] Create `railway.toml` with service definitions (web, worker, beat)
-- [ ] Finalize `Dockerfile` (multi-stage, non-root user)
-- [ ] Configure `auto_sell/settings/production.py` (ALLOWED_HOSTS, HTTPS, static files via WhiteNoise)
-- [ ] Set all env vars in Railway dashboard
-- [ ] Enable pgvector extension on Railway Postgres (`CREATE EXTENSION vector;`)
-- [ ] Run `python manage.py migrate` on Railway
-- [ ] Create superuser on Railway
+- [x] Finalize `Dockerfile` (multi-stage, non-root user, collectstatic at build time)
+- [x] Configure `auto_sell/settings/production.py` (ALLOWED_HOSTS from env, HTTPS settings)
+- [x] Write Coolify deployment guide (`docs/deployment-coolify.md`)
+- [ ] Provision EC2 instance (t3.medium, Ubuntu 22.04) and point domain at it
+- [ ] Install Coolify and configure server
+- [ ] Provision Postgres (`pgvector/pgvector:pg16`) and Redis in Coolify
+- [ ] Create web, worker, and beat services in Coolify; set env vars
+- [ ] Run `python manage.py migrate` and `createsuperuser` via Coolify terminal
+- [ ] Enable pgvector extension (`CREATE EXTENSION IF NOT EXISTS vector;`)
 - [ ] Register webhook URL with Meta App Dashboard
 - [ ] End-to-end smoke test: send a WhatsApp message → get a catalog response → generate payment link → confirm sale → owner alert received
 

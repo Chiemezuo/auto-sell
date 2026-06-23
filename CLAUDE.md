@@ -66,6 +66,7 @@ The LLM enforces price range constraints. Never hardcode prices or bypass the `p
 
 Inbound: `POST /api/webhooks/whatsapp/{tenant_slug}/`
 - Verify `X-Hub-Signature-256` against `tenant.wa_app_secret`
+- Payload validated against `WAWebhookPayload` Pydantic schema (`apps/conversations/schemas.py`) — malformed payloads are logged and return 200 without processing
 - Deduplicate via `Message.wa_message_id` before enqueueing
 - Non-text messages (images, audio, stickers) dispatch `reply_unsupported_message` — never silently dropped
 - Must return HTTP 200 in under 5 seconds — all processing is async in Celery

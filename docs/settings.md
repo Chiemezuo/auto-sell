@@ -120,6 +120,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",     # static file serving
     "django.contrib.postgres",        # SearchVectorField, ArrayField, etc.
     # Third-party
+    "axes",                           # brute-force protection for /admin/ and /tenant/
     "django_extensions",              # shell_plus, runserver_plus
     # Local apps
     "apps.tenants",
@@ -139,6 +140,7 @@ Order matters. Key entries:
 - `SessionMiddleware` — must be before `AuthenticationMiddleware`
 - `CsrfViewMiddleware` — CSRF protection for POST requests (Django Ninja bypasses this for API endpoints by default)
 - `AuthenticationMiddleware` — attaches `request.user`
+- `AxesMiddleware` — must come after `AuthenticationMiddleware`; intercepts failed logins and enforces lockouts
 
 ### `DATABASES`
 ```python
@@ -205,6 +207,38 @@ STORAGES = {
 }
 ```
 `STATIC_ROOT` is where `python manage.py collectstatic` copies files to. WhiteNoise serves them from there. The `CompressedManifestStaticFilesStorage` backend gzips files and appends content hashes (e.g. `admin.css?v=abc123`) for cache-busting.
+
+### `LOGGING`
+
+Configures Django's standard logging to write formatted output to the console (stdout), which is captured by Railway's log drain in production and by `docker compose logs` locally.
+
+```python
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {"format": "{levelname} {asctime} {name} {message}", "style": "{"},
+    },
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "verbose"}},
+    "loggers": {
+        "apps": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "celery": {"handlers": ["console"], "level": "INFO", "propagate": False},
+    },
+}
+```
+
+The `apps` logger covers all `apps.*` modules — task files acquire it with `logging.getLogger(__name__)`. Key events logged: rate limit hits, task exceptions, payment link creation, alert owner failures, and sweep runs.
+
+### `AXES_*` — Brute-force protection
+
+```python
+AXES_FAILURE_LIMIT = 5          # lock out after 5 failed attempts
+AXES_COOLOFF_TIME = 1           # unlock after 1 hour
+AXES_RESET_ON_SUCCESS = True    # clear failure count on successful login
+AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]  # lock by both
+```
+
+Requires `axes.backends.AxesStandaloneBackend` to be listed first in `AUTHENTICATION_BACKENDS`. Django's own `ModelBackend` must still be listed second so normal authentication continues to work. Locked-out users and their history are visible in the Django Admin under **Axes**.
 
 ### `DEFAULT_AUTO_FIELD`
 ```python

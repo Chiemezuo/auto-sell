@@ -71,6 +71,13 @@ Adds useful development management commands:
 - `python manage.py shell_plus --ipython` — same, but uses IPython for autocomplete and syntax highlighting
 - `python manage.py runserver_plus` — enhanced dev server with Werkzeug debugger
 
+### `django-axes==8.3.1`
+Brute-force protection for Django's admin login. After 5 consecutive failed login attempts from the same username or IP address, axes locks the account out for 1 hour. Configuration lives in `base.py` under `AXES_*` settings.
+
+Requires `axes.middleware.AxesMiddleware` (after `AuthenticationMiddleware`) and `axes.backends.AxesStandaloneBackend` at the top of `AUTHENTICATION_BACKENDS`. Needs its own DB tables — included in the axes migrations, run alongside Django's migrations.
+
+Chosen over custom middleware because it handles edge cases (IPv6, proxies, per-user vs per-IP lockout, admin UI for viewing and clearing lockouts) without custom code.
+
 ### `whitenoise==6.12.0`
 Serves static files (CSS, JS for admin) directly from Django in production — no separate Nginx or CDN needed for the MVP. Inserted as the second middleware (after `SecurityMiddleware`) so it intercepts static file requests before they reach Django's view layer.
 

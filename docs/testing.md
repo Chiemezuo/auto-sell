@@ -43,7 +43,7 @@ Tests live in `tests/` (project-level, organised by app) and any `tests.py` / `t
 
 ## Current Test Suite
 
-31 tests across three modules, all passing.
+41 tests across five modules, all passing (requires Postgres for catalog and payment task tests).
 
 ### `tests/conversations/test_webhooks.py` — 6 tests
 
@@ -84,6 +84,30 @@ These call `process_message.apply()`, `reply_unsupported_message.apply()`, and `
 | `test_escalated_conversation_is_silent` | A message on an `escalated` conversation produces no LLM call and no WhatsApp reply |
 | `test_escalation_tool_sets_state_and_notifies_owner` | LLM calling `escalate_to_human` sets state to `escalated` and enqueues `notify_owner_escalation` with the reason |
 | `test_notify_owner_escalation_sends_whatsapp` | `notify_owner_escalation` sends a WhatsApp message to `owner_phone` containing the customer ID and reason |
+
+### `tests/payments/test_tasks.py` — 5 tests
+
+These call `create_payment_link.apply()` synchronously with `PaystackGateway` and `WhatsAppClient` mocked.
+
+| Test | What it checks |
+|---|---|
+| `test_create_payment_link_calls_paystack` | `initialize_transaction` called with correct amount and placeholder email |
+| `test_create_payment_link_creates_db_record` | `PaymentLink` row created with correct reference, URL, amount, and `STATUS_PENDING` |
+| `test_create_payment_link_sets_awaiting_payment_state` | Conversation transitions to `STATE_AWAITING_PAYMENT` |
+| `test_create_payment_link_sends_whatsapp_with_url` | WhatsApp message sent to customer containing the payment URL |
+| `test_create_payment_link_nonexistent_conversation` | Graceful no-op when `conversation_id` doesn't exist |
+
+### `tests/catalog/test_search.py` — 5 tests
+
+These test `get_relevant_products()` end-to-end against a real PostgreSQL database with the `search_vector` populated by the `post_save` signal.
+
+| Test | What it checks |
+|---|---|
+| `test_search_returns_matching_product` | A product whose name/description match the query is returned |
+| `test_search_filters_by_tenant` | A product belonging to a different tenant is not returned |
+| `test_search_excludes_unavailable_products` | Products with `is_available=False` are excluded |
+| `test_search_returns_empty_for_no_match` | A query with no matching terms returns an empty list |
+| `test_search_respects_limit` | The `limit` parameter caps the number of results |
 
 ### `tests/payments/test_webhook.py` — 5 tests
 

@@ -1,6 +1,9 @@
+import logging
 from decimal import Decimal
 from celery import shared_task
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 from apps.conversations.models import Conversation
 from apps.conversations.whatsapp import WhatsAppClient
 from .models import PaymentLink
@@ -44,6 +47,7 @@ def create_payment_link(conversation_id: str, items_snapshot: list, agreed_price
         conversation.state = Conversation.STATE_AWAITING_PAYMENT
         conversation.save(update_fields=["state"])
 
+    logger.info("Payment link created for conversation %s (ref: %s)", conversation_id, result["reference"])
     # Send outside the transaction — a failed WhatsApp send should not roll back
     # the PaymentLink (it already exists on Paystack's side)
     wa_client = WhatsAppClient(tenant)

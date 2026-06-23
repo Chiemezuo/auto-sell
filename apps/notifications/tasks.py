@@ -1,5 +1,8 @@
+import logging
 from celery import shared_task
 from celery.exceptions import MaxRetriesExceededError
+
+logger = logging.getLogger(__name__)
 from apps.conversations.models import Conversation
 from apps.conversations.whatsapp import WhatsAppClient
 from apps.payments.models import Sale
@@ -41,6 +44,7 @@ def alert_owner(self, sale_id: str):
         try:
             raise self.retry(exc=exc)
         except MaxRetriesExceededError:
+            logger.error("alert_owner exhausted retries for sale %s: %s", sale_id, exc)
             NotificationLog.objects.create(
                 tenant=tenant,
                 sale=sale,

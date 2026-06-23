@@ -1,8 +1,11 @@
 import json
+import logging
 import mimetypes
 import redis
 from celery import shared_task
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -37,6 +40,7 @@ def _redis():
 def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str, wa_message_id: str):
     r = _redis()
     if _check_rate_limit(r, tenant_id, customer_wa_id):
+        logger.info("Rate limit hit for customer %s on tenant %s", customer_wa_id, tenant_id)
         try:
             tenant = Tenant.objects.get(id=tenant_id, is_active=True)
         except Tenant.DoesNotExist:
@@ -159,6 +163,7 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
             conversation.last_message_at = timezone.now()
             conversation.save(update_fields=["last_message_at"])
     except Exception as exc:
+        logger.exception("process_message failed for conversation %s (tenant %s): %s", customer_wa_id, tenant_id, exc)
         r.delete(lock_key)
         raise self.retry(exc=exc)
     finally:
@@ -182,6 +187,7 @@ def reply_unsupported_message(tenant_id: str, customer_wa_id: str):
 
 @shared_task
 def sweep_abandoned_conversations():
+    logger.info("Running abandoned conversation sweep")
     now = timezone.now()
     Conversation.objects.filter(
         state=Conversation.STATE_ACTIVE,

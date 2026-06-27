@@ -19,7 +19,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_SETTINGS_MODULE=auto_sell.settings.production
 
 # Create a non-root user that will own and run the app
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+RUN addgroup --system appgroup \
+    && adduser --system --ingroup appgroup --home /home/appuser appuser \
+    && mkdir -p /home/appuser \
+    && chown appuser:appgroup /home/appuser
 
 WORKDIR /app
 

@@ -32,4 +32,4 @@ COPY --chown=appuser:appgroup . .
 
 USER appuser
 
-CMD ["celery", "-A", "auto_sell", "beat", "-l", "info"]
+CMD ["celery", "-A", "auto_sell", "beat", "-l", "info", "--schedule", "/home/appuser/celerybeat-schedule"]

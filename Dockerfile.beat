@@ -19,7 +19,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DJANGO_SETTINGS_MODULE=auto_sell.settings.production
 
 RUN addgroup --system appgroup \
-    && adduser --system --ingroup appgroup --home /home/appuser appuser \
+    && adduser --system --ingroup appgroup --home /home/appuser --shell /bin/sh appuser \
     && mkdir -p /home/appuser \
     && chown appuser:appgroup /home/appuser
 

@@ -20,7 +20,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Create a non-root user that will own and run the app
 RUN addgroup --system appgroup \
-    && adduser --system --ingroup appgroup --home /home/appuser appuser \
+    && adduser --system --ingroup appgroup --home /home/appuser --shell /bin/sh appuser \
     && mkdir -p /home/appuser \
     && chown appuser:appgroup /home/appuser
 

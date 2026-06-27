@@ -30,12 +30,14 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy source code
 COPY --chown=appuser:appgroup . .
 
-# Collect static files (admin CSS/JS) at build time
-RUN python manage.py collectstatic --noinput
+# Collect static files at build time — dummy SECRET_KEY since no .env exists in CI/Coolify
+RUN SECRET_KEY=build-only-placeholder python manage.py collectstatic --noinput
+
+RUN chmod +x entrypoint.sh
 
 # Switch to non-root user for runtime
 USER appuser
 
 EXPOSE 8000
 
-CMD ["gunicorn", "auto_sell.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "60"]
+CMD ["./entrypoint.sh"]

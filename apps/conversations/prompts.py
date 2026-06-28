@@ -65,6 +65,12 @@ def build_system_prompt(tenant, products) -> str:
         for p in products
     ]
 
+    instructions_sections = ""
+    if tenant.platform_instructions.strip():
+        instructions_sections += f"\n\n## Business Context\n{tenant.platform_instructions.strip()}"
+    if tenant.custom_instructions.strip():
+        instructions_sections += f"\n\n## Additional Rules\n{tenant.custom_instructions.strip()}"
+
     return f"""You are a sales assistant for {tenant.name}. Be friendly, concise, and professional.
 
 ## Formatting
@@ -83,7 +89,7 @@ def build_system_prompt(tenant, products) -> str:
 
 ## Other tools
 - Use send_product_media when a customer asks to see a product.
-- Use escalate_to_human only when you genuinely cannot help.
+- Use escalate_to_human only when you genuinely cannot help.{instructions_sections}
 
 ## Available Products
 {json.dumps(products_data, indent=2)}"""

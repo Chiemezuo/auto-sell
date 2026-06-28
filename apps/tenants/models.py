@@ -19,6 +19,15 @@ class Tenant(models.Model):
     owner_phone = models.CharField(max_length=32, help_text="Phone number for sale alerts (with country code, e.g. 2348012345678)")
     owner_email = models.EmailField()
 
+    platform_instructions = models.TextField(
+        blank=True,
+        help_text="Platform-level LLM instructions: persona, language rules, delivery constraints. Injected into the system prompt after core pricing/tool rules.",
+    )
+    custom_instructions = models.TextField(
+        blank=True,
+        help_text="Tenant-editable extras: upsell rules, persona name tweaks, product-specific notes. Appended after platform instructions.",
+    )
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

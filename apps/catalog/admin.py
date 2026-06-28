@@ -20,7 +20,7 @@ class ProductAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at", "updated_at", "search_vector"]
     inlines = [ProductMediaInline]
     fieldsets = [
-        (None, {"fields": ["tenant", "name", "description", "is_available"]}),
+        (None, {"fields": ["tenant", "name", "description", "is_available", "stock_quantity"]}),
         ("Pricing", {"fields": ["price_min", "price_max", "currency"]}),
         ("Metadata", {"fields": ["created_at", "updated_at", "search_vector"]}),
     ]
@@ -61,7 +61,7 @@ class TenantProductAdmin(TenantModelAdmin):
     readonly_fields = ["created_at", "updated_at", "search_vector"]
     inlines = [TenantProductMediaInline]
     fieldsets = [
-        (None, {"fields": ["name", "description", "is_available"]}),
+        (None, {"fields": ["name", "description", "is_available", "stock_quantity"]}),
         ("Pricing", {"fields": ["price_min", "price_max", "currency"]}),
         ("Metadata", {"fields": ["created_at", "updated_at"]}),
     ]

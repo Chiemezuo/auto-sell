@@ -26,8 +26,17 @@ TOOLS = [
                     "agreed_price": {"type": "number"},
                     "items_snapshot": {
                         "type": "array",
-                        "items": {"type": "object"},
-                        "description": "List of items being purchased",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "product_id": {"type": "string", "description": "UUID of the product"},
+                                "name": {"type": "string"},
+                                "qty": {"type": "integer"},
+                                "unit_price": {"type": "number"},
+                            },
+                            "required": ["product_id", "name", "qty"],
+                        },
+                        "description": "List of items being purchased. Each item must include product_id.",
                     },
                 },
                 "required": ["agreed_price", "items_snapshot"],
@@ -52,8 +61,9 @@ TOOLS = [
 
 
 def build_system_prompt(tenant, products) -> str:
-    products_data = [
-        {
+    products_data = []
+    for p in products:
+        entry = {
             "id": str(p.id),
             "name": p.name,
             "description": p.description,
@@ -62,8 +72,9 @@ def build_system_prompt(tenant, products) -> str:
             "currency": p.currency,
             "media": [{"type": m.media_type, "url": m.cdn_url} for m in p.media.all()],
         }
-        for p in products
-    ]
+        if p.stock_quantity is not None:
+            entry["stock_remaining"] = p.stock_quantity
+        products_data.append(entry)
 
     instructions_sections = ""
     if tenant.platform_instructions.strip():

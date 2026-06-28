@@ -1,12 +1,17 @@
 import json
+import logging
 from ninja import Router
 from ninja.errors import HttpError
 from django.db import transaction
+from django.db.models import F
 from django.http import HttpRequest
 from django.utils import timezone
 from apps.conversations.models import Conversation
+from apps.catalog.models import Product
 from .gateways.paystack import PaystackGateway
 from .models import PaymentLink, Sale
+
+logger = logging.getLogger(__name__)
 
 router = Router(tags=["Payments"])
 _gateway = PaystackGateway()
@@ -74,9 +79,33 @@ def paystack_webhook(request: HttpRequest):
         payment_link.conversation.state = Conversation.STATE_COMPLETED
         payment_link.conversation.save(update_fields=["state"])
 
+        _decrement_stock(payment_link.tenant_id, items_snapshot)
+
     # Enqueue after the transaction commits so tasks see a fully-persisted Sale
     from apps.notifications.tasks import alert_owner, send_confirmation
     alert_owner.delay(str(sale.id))
     send_confirmation.delay(str(payment_link.conversation.id))
 
     return {"status": "ok"}
+
+
+def _decrement_stock(tenant_id, items_snapshot: list) -> None:
+    for item in items_snapshot:
+        product_id = item.get("product_id")
+        if not product_id:
+            continue
+        qty = max(int(item.get("qty", 1)), 1)
+        try:
+            product = Product.objects.select_for_update().get(
+                id=product_id, tenant_id=tenant_id, stock_quantity__isnull=False
+            )
+        except Product.DoesNotExist:
+            continue
+        product.stock_quantity = max(product.stock_quantity - qty, 0)
+        update_fields = ["stock_quantity"]
+        if product.stock_quantity == 0:
+            product.is_available = False
+            update_fields.append("is_available")
+        product.save(update_fields=update_fields)
+        if product.stock_quantity == 0:
+            logger.info("Product %s (%s) sold out", product.name, product_id)

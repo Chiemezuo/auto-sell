@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from apps.tenants.models import Tenant
 from .models import Message
 from .schemas import WAWebhookPayload
-from .tasks import process_message, reply_unsupported_message
+from .tasks import process_message, reply_unsupported_message, handle_owner_command
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,12 @@ def receive_message(request: HttpRequest, tenant_slug: str):
     for entry in payload.entry:
         for change in entry.changes:
             for message in change.value.messages:
+                # Owner commands are routed before any customer logic
+                if tenant.owner_phone and message.from_ == tenant.owner_phone:
+                    if message.type == "text":
+                        handle_owner_command.delay(str(tenant.id), message.text.body)
+                    continue
+
                 if message.type != "text":
                     reply_unsupported_message.delay(str(tenant.id), message.from_)
                     continue

@@ -98,6 +98,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.conversations.tasks.sweep_abandoned_conversations",
         "schedule": crontab(minute=0),  # every hour on the hour
     },
+    "daily-owner-digest": {
+        "task": "apps.notifications.tasks.notify_owner_daily_digest",
+        "schedule": crontab(hour=7, minute=0),  # 7am UTC = 8am WAT
+    },
 }
 
 # Static files

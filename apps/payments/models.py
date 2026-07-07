@@ -9,11 +9,13 @@ class PaymentLink(models.Model):
     STATUS_PAID = "paid"
     STATUS_EXPIRED = "expired"
     STATUS_FAILED = "failed"
+    STATUS_REFUNDED = "refunded"
     STATUSES = [
         (STATUS_PENDING, "Pending"),
         (STATUS_PAID, "Paid"),
         (STATUS_EXPIRED, "Expired"),
         (STATUS_FAILED, "Failed"),
+        (STATUS_REFUNDED, "Refunded"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)

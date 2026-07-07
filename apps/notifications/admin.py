@@ -7,17 +7,17 @@ from apps.tenants.admin_site import tenant_admin, TenantModelAdmin
 
 @admin.register(NotificationLog)
 class NotificationLogAdmin(admin.ModelAdmin):
-    list_display = ["tenant", "sale", "channel", "status", "sent_at"]
-    list_filter = ["tenant", "channel", "status"]
+    list_display = ["tenant", "event_type", "sale", "channel", "status", "sent_at"]
+    list_filter = ["tenant", "event_type", "channel", "status"]
     readonly_fields = ["sent_at", "error"]
 
 
 # --- Tenant admin (business owners at /tenant/) ---
 
 class TenantNotificationLogAdmin(TenantModelAdmin):
-    list_display = ["sale", "channel", "status", "sent_at"]
-    list_filter = ["channel", "status"]
-    readonly_fields = ["sale", "channel", "status", "error", "sent_at"]
+    list_display = ["event_type", "sale", "channel", "status", "sent_at"]
+    list_filter = ["event_type", "channel", "status"]
+    readonly_fields = ["event_type", "sale", "channel", "status", "error", "sent_at"]
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(

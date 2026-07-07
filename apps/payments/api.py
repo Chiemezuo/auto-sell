@@ -43,6 +43,32 @@ def paystack_webhook(request: HttpRequest):
                 pass
         return {"status": "ok"}
 
+    if event == "refund.processed":
+        data = payload.get("data", {})
+        reference = data.get("transaction_reference")
+        if reference:
+            try:
+                payment_link = PaymentLink.objects.select_related("tenant").get(
+                    gateway_reference=reference, status=PaymentLink.STATUS_PAID
+                )
+            except PaymentLink.DoesNotExist:
+                return {"status": "not_found"}
+
+            if payment_link.status == PaymentLink.STATUS_REFUNDED:
+                return {"status": "already_processed"}  # idempotency guard
+
+            try:
+                sale = payment_link.sale
+            except Sale.DoesNotExist:
+                return {"status": "no_sale"}
+
+            with transaction.atomic():
+                payment_link.status = PaymentLink.STATUS_REFUNDED
+                payment_link.save(update_fields=["status"])
+                _restore_stock(payment_link.tenant_id, sale.items_snapshot)
+
+        return {"status": "ok"}
+
     if event != "charge.success":
         return {"status": "ignored"}
 
@@ -79,17 +105,43 @@ def paystack_webhook(request: HttpRequest):
         payment_link.conversation.state = Conversation.STATE_COMPLETED
         payment_link.conversation.save(update_fields=["state"])
 
-        _decrement_stock(payment_link.tenant_id, items_snapshot)
+        sold_out_names = _decrement_stock(payment_link.tenant_id, items_snapshot)
 
     # Enqueue after the transaction commits so tasks see a fully-persisted Sale
-    from apps.notifications.tasks import alert_owner, send_confirmation
+    from apps.notifications.tasks import alert_owner, send_confirmation, notify_owner_stock_out
     alert_owner.delay(str(sale.id))
     send_confirmation.delay(str(payment_link.conversation.id))
+    for name in sold_out_names:
+        notify_owner_stock_out.delay(str(payment_link.tenant_id), name)
 
     return {"status": "ok"}
 
 
-def _decrement_stock(tenant_id, items_snapshot: list) -> None:
+def _restore_stock(tenant_id, items_snapshot: list) -> None:
+    """Restores stock for each item in a refunded sale."""
+    for item in items_snapshot:
+        product_id = item.get("product_id")
+        if not product_id:
+            continue
+        qty = max(int(item.get("qty", 1)), 1)
+        try:
+            product = Product.objects.select_for_update().get(
+                id=product_id, tenant_id=tenant_id, stock_quantity__isnull=False
+            )
+        except Product.DoesNotExist:
+            continue
+        product.stock_quantity += qty
+        update_fields = ["stock_quantity"]
+        if not product.is_available:
+            product.is_available = True
+            update_fields.append("is_available")
+        product.save(update_fields=update_fields)
+        logger.info("Stock restored: %s (%s) +%d units", product.name, product_id, qty)
+
+
+def _decrement_stock(tenant_id, items_snapshot: list) -> list:
+    """Decrements stock for each item sold. Returns names of products that just hit zero."""
+    sold_out = []
     for item in items_snapshot:
         product_id = item.get("product_id")
         if not product_id:
@@ -106,6 +158,7 @@ def _decrement_stock(tenant_id, items_snapshot: list) -> None:
         if product.stock_quantity == 0:
             product.is_available = False
             update_fields.append("is_available")
-        product.save(update_fields=update_fields)
-        if product.stock_quantity == 0:
+            sold_out.append(product.name)
             logger.info("Product %s (%s) sold out", product.name, product_id)
+        product.save(update_fields=update_fields)
+    return sold_out

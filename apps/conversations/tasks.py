@@ -55,6 +55,13 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
     except Tenant.DoesNotExist:
         return
 
+    if tenant.bot_paused:
+        WhatsAppClient(tenant).send_text(
+            customer_wa_id,
+            f"Hi! You're speaking directly with the {tenant.name} team. Please share what you need and we'll respond shortly.",
+        )
+        return
+
     conversation, created = Conversation.objects.get_or_create(
         tenant=tenant,
         customer_wa_id=customer_wa_id,
@@ -183,6 +190,12 @@ def reply_unsupported_message(tenant_id: str, customer_wa_id: str):
         customer_wa_id,
         "Hi! I can only read text messages. Please type your question and I'll be happy to help.",
     )
+
+
+@shared_task
+def handle_owner_command(tenant_id: str, text: str):
+    from .owner_commands import dispatch
+    dispatch(tenant_id, text)
 
 
 @shared_task

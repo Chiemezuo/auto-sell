@@ -29,6 +29,10 @@ class Tenant(models.Model):
     )
 
     is_active = models.BooleanField(default=True)
+    bot_paused = models.BooleanField(
+        default=False,
+        help_text="When True, the bot replies 'temporarily unavailable' to all customer messages.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

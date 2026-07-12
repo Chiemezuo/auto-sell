@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import pytest
 from unittest.mock import patch
+from apps.catalog.models import Product
 from apps.conversations.models import Conversation
 from apps.payments.models import PaymentLink, Sale
 
@@ -147,3 +148,106 @@ def test_paystack_charge_failed_marks_link_failed_and_resets_conversation(
     assert payment_link.status == PaymentLink.STATUS_FAILED
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_ACTIVE
+
+
+# ---------------------------------------------------------------------------
+# refund.processed
+# ---------------------------------------------------------------------------
+
+def _refund_payload(reference: str):
+    return {"event": "refund.processed", "data": {"transaction_reference": reference}}
+
+
+@pytest.fixture
+def tracked_product(db, tenant):
+    return Product.objects.create(
+        tenant=tenant, name="Tracked Item", description="desc",
+        price_min="500", price_max="1000", currency="NGN",
+        is_available=False, stock_quantity=0,
+    )
+
+
+@pytest.fixture
+def paid_payment_link(db, tenant, conversation):
+    return PaymentLink.objects.create(
+        conversation=conversation,
+        tenant=tenant,
+        amount="2000.00",
+        currency="NGN",
+        gateway="paystack",
+        gateway_reference="ref_refund_001",
+        payment_url="https://paystack.com/pay/ref_refund_001",
+        status=PaymentLink.STATUS_PAID,
+    )
+
+
+@pytest.fixture
+def refund_sale(db, tenant, conversation, paid_payment_link, tracked_product):
+    return Sale.objects.create(
+        payment_link=paid_payment_link,
+        tenant=tenant,
+        conversation=conversation,
+        customer_wa_id=conversation.customer_wa_id,
+        amount_paid="2000.00",
+        items_snapshot=[{"product_id": str(tracked_product.id), "name": tracked_product.name, "qty": 2}],
+        gateway_payload={"reference": "ref_refund_001"},
+    )
+
+
+@pytest.mark.django_db
+def test_refund_marks_link_refunded_and_restores_stock(
+    client, tenant, paid_payment_link, refund_sale, tracked_product, settings
+):
+    settings.PAYSTACK_SECRET_KEY = "test-paystack-secret"
+    body = json.dumps(_refund_payload(paid_payment_link.gateway_reference)).encode()
+
+    response = client.post(
+        "/api/payments/paystack/webhook/",
+        data=body,
+        content_type="application/json",
+        HTTP_X_PAYSTACK_SIGNATURE=_paystack_sig("test-paystack-secret", body),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    paid_payment_link.refresh_from_db()
+    assert paid_payment_link.status == PaymentLink.STATUS_REFUNDED
+    tracked_product.refresh_from_db()
+    assert tracked_product.stock_quantity == 2
+    assert tracked_product.is_available is True
+
+
+@pytest.mark.django_db
+def test_refund_second_call_returns_not_found(
+    client, tenant, paid_payment_link, refund_sale, settings
+):
+    settings.PAYSTACK_SECRET_KEY = "test-paystack-secret"
+    body = json.dumps(_refund_payload(paid_payment_link.gateway_reference)).encode()
+    sig = _paystack_sig("test-paystack-secret", body)
+
+    client.post(
+        "/api/payments/paystack/webhook/",
+        data=body, content_type="application/json",
+        HTTP_X_PAYSTACK_SIGNATURE=sig,
+    )
+    response = client.post(
+        "/api/payments/paystack/webhook/",
+        data=body, content_type="application/json",
+        HTTP_X_PAYSTACK_SIGNATURE=sig,
+    )
+    # Link is now REFUNDED; the query filters on STATUS_PAID → DoesNotExist → not_found
+    assert response.json() == {"status": "not_found"}
+
+
+@pytest.mark.django_db
+def test_refund_unknown_reference_returns_not_found(client, tenant, settings):
+    settings.PAYSTACK_SECRET_KEY = "test-paystack-secret"
+    body = json.dumps(_refund_payload("ref_does_not_exist")).encode()
+
+    response = client.post(
+        "/api/payments/paystack/webhook/",
+        data=body,
+        content_type="application/json",
+        HTTP_X_PAYSTACK_SIGNATURE=_paystack_sig("test-paystack-secret", body),
+    )
+    assert response.json() == {"status": "not_found"}

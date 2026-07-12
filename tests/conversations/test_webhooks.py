@@ -104,3 +104,53 @@ def test_non_text_message_enqueues_reply_unsupported(client, tenant):
         )
     assert response.status_code == 200
     mock_delay.assert_called_once_with(str(tenant.id), "2348099999999")
+
+
+# ---------------------------------------------------------------------------
+# Owner message routing
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_owner_text_message_dispatches_handle_owner_command(client, tenant):
+    body = json.dumps(
+        build_wa_payload(
+            tenant.wa_phone_number_id,
+            tenant.owner_phone,
+            text_body="SALES TODAY",
+            message_id="owner_msg_1",
+        )
+    ).encode()
+    with patch("apps.conversations.tasks.handle_owner_command.delay") as mock_cmd, \
+         patch("apps.conversations.tasks.process_message.delay") as mock_proc:
+        response = client.post(
+            f"/api/webhooks/whatsapp/{tenant.slug}/",
+            data=body,
+            content_type="application/json",
+            HTTP_X_HUB_SIGNATURE_256=sign_wa_request(tenant.wa_app_secret, body),
+        )
+    assert response.status_code == 200
+    mock_cmd.assert_called_once_with(str(tenant.id), "SALES TODAY")
+    mock_proc.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_owner_non_text_message_is_silently_dropped(client, tenant):
+    body = json.dumps(
+        build_wa_payload(
+            tenant.wa_phone_number_id,
+            tenant.owner_phone,
+            message_type="image",
+            message_id="owner_img_1",
+        )
+    ).encode()
+    with patch("apps.conversations.tasks.handle_owner_command.delay") as mock_cmd, \
+         patch("apps.conversations.tasks.reply_unsupported_message.delay") as mock_unsupported:
+        response = client.post(
+            f"/api/webhooks/whatsapp/{tenant.slug}/",
+            data=body,
+            content_type="application/json",
+            HTTP_X_HUB_SIGNATURE_256=sign_wa_request(tenant.wa_app_secret, body),
+        )
+    assert response.status_code == 200
+    mock_cmd.assert_not_called()
+    mock_unsupported.assert_not_called()

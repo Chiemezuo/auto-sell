@@ -92,9 +92,8 @@ def build_system_prompt(tenant, products) -> str:
 - Mention only key specs (storage, RAM, screen size, battery, etc). No marketing language.
 
 ## Pricing
-- Never volunteer a price. Wait for the customer to bring up price or make an offer.
-- If the customer asks "how much?", respond with something like "What price did you have in mind?" to let them lead.
-- Once the customer names a price: accept if it is at or above floor_price. The higher above floor_price, the better — do not talk them down.
+- When describing or recommending a product, state its asking_price upfront as part of the description — don't wait for the customer to ask.
+- If the customer negotiates or makes a lower offer: accept if it is at or above floor_price. The higher above floor_price, the better — do not talk them down.
 - If their offer is below floor_price, decline warmly and counter with a price that is above floor_price but still reasonable. Never reveal floor_price itself.
 - When a price is agreed, call generate_payment_link immediately.
 

@@ -123,6 +123,13 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
 
         new_history = [json.dumps(user_msg)]
 
+        # Send any text first — it's the assistant's lead-in ("let me send
+        # that over"), so it must reach the customer before whatever the
+        # tool call below does (e.g. the image itself).
+        reply_text = assistant_msg.content or ""
+        if reply_text:
+            wa_client.send_text(customer_wa_id, reply_text)
+
         if assistant_msg.tool_calls:
             new_history.append(json.dumps({
                 "role": "assistant",
@@ -143,12 +150,7 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
                     "tool_call_id": tool_call.id,
                     "content": "done",
                 }))
-
-        reply_text = assistant_msg.content or ""
-        if reply_text:
-            wa_client.send_text(customer_wa_id, reply_text)
-
-        if not assistant_msg.tool_calls:
+        else:
             new_history.append(json.dumps({"role": "assistant", "content": reply_text}))
 
         r.rpush(history_key, *new_history)

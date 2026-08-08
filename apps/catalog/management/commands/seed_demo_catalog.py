@@ -1,6 +1,15 @@
+from urllib.parse import quote
 from django.core.management.base import BaseCommand, CommandError
 from apps.tenants.models import Tenant
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductMedia
+
+
+def placeholder_image_url(name: str) -> str:
+    # placehold.co renders a real PNG on the fly — httpx.get() in
+    # process_media (apps/conversations/tasks.py) fetches it just like a
+    # real R2-hosted image would, so send_product_media works end-to-end
+    # without needing actual product photography.
+    return f"https://placehold.co/800x600/1a1a2e/ffffff/png?text={quote(name)}"
 
 # Illustrative NGN prices for testing negotiation/search/stock logic only —
 # not verified against real current market rates. Adjust before relying on
@@ -414,8 +423,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Deleted {deleted} existing product(s) for '{slug}'"))
 
         created_count = 0
+        media_count = 0
         for entry in DEMO_PRODUCTS:
-            _, created = Product.objects.get_or_create(
+            product, created = Product.objects.get_or_create(
                 tenant=tenant,
                 name=entry["name"],
                 defaults={
@@ -429,7 +439,18 @@ class Command(BaseCommand):
             if created:
                 created_count += 1
 
+            if not product.media.exists():
+                ProductMedia.objects.create(
+                    product=product,
+                    media_type="image",
+                    s3_key=f"demo/{product.id}.png",
+                    cdn_url=placeholder_image_url(entry["name"]),
+                    sort_order=0,
+                )
+                media_count += 1
+
         self.stdout.write(self.style.SUCCESS(
             f"Seeded '{slug}': {created_count} new product(s), "
-            f"{len(DEMO_PRODUCTS) - created_count} already existed (skipped)."
+            f"{len(DEMO_PRODUCTS) - created_count} already existed (skipped). "
+            f"Added placeholder media to {media_count} product(s)."
         ))

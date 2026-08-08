@@ -7,6 +7,11 @@ DEBUG = False
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
+# Needed behind a reverse proxy (Coolify/Traefik) — Django 4+ checks POST requests'
+# Origin/Referer against this list, and same-origin alone isn't enough once SSL
+# termination happens upstream. e.g. CSRF_TRUSTED_ORIGINS=https://autosell.yourdomain.com
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
 # SSL settings — disable these when running without HTTPS (e.g. IP-only deployments).
 # Set HTTPS=true in env once a domain + SSL cert is in place.
 _https = env.bool("HTTPS", default=False)

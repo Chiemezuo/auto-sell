@@ -23,7 +23,7 @@ def test_process_message_lock_prevents_double_processing(tenant, conversation, f
 
 
 @pytest.mark.django_db
-def test_returning_customer_resets_completed_conversation(
+def test_completed_conversation_stays_silent(
     tenant, conversation, fake_redis, mock_chat, mock_whatsapp
 ):
     conversation.state = Conversation.STATE_COMPLETED
@@ -37,8 +37,9 @@ def test_returning_customer_resets_completed_conversation(
     })
 
     conversation.refresh_from_db()
-    assert conversation.state == Conversation.STATE_ACTIVE
-    mock_chat.assert_called_once()
+    assert conversation.state == Conversation.STATE_COMPLETED
+    mock_chat.assert_not_called()
+    mock_whatsapp.send_text.assert_not_called()
 
 
 @pytest.mark.django_db

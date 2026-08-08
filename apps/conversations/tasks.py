@@ -67,10 +67,7 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
         customer_wa_id=customer_wa_id,
         defaults={"state": Conversation.STATE_ACTIVE},
     )
-    if not created and conversation.state in (
-        Conversation.STATE_COMPLETED,
-        Conversation.STATE_ABANDONED,
-    ):
+    if not created and conversation.state == Conversation.STATE_ABANDONED:
         conversation.state = Conversation.STATE_ACTIVE
         conversation.save(update_fields=["state"])
         r.delete(f"conversation:{conversation.id}:history")
@@ -81,8 +78,10 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
         return  # another worker is already processing this conversation
 
     try:
-        if conversation.state == Conversation.STATE_ESCALATED:
-            return  # human has taken over — bot stays silent
+        if conversation.state in (Conversation.STATE_ESCALATED, Conversation.STATE_COMPLETED):
+            # Order confirmed — the owner reaches out to arrange delivery.
+            # Bot stays silent until state is manually reset via Django Admin.
+            return
 
         if conversation.state == Conversation.STATE_AWAITING_PAYMENT:
             from apps.payments.models import PaymentLink

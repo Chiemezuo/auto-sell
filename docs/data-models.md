@@ -191,7 +191,7 @@ One thread between a customer and a business over WhatsApp. There can only be **
   and immediately resets conversation to [active] (same path as link expired).
 ```
 
-**`unique_together = [("tenant", "customer_wa_id")]`** — one row per customer per tenant, ever. When a returning customer messages after a `completed` or `abandoned` conversation, `process_message` detects the terminal state, resets it to `active`, and deletes the stale Redis history and product cache before processing continues. This keeps the schema simple (no new rows, no FK changes) while giving returning customers a fresh session.
+**`unique_together = [("tenant", "customer_wa_id")]`** — one row per customer per tenant, ever. When a returning customer messages after an `abandoned` conversation, `process_message` detects the terminal state, resets it to `active`, and deletes the stale Redis history and product cache before processing continues. A `completed` conversation is *not* auto-reopened — the bot stays silent (same as `escalated`) so the owner can reach out directly about delivery; a platform admin resets it to `active` via Django Admin if the customer should return to the bot.
 
 ---
 

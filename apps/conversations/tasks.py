@@ -155,6 +155,15 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
         r.ltrim(history_key, -HISTORY_MAX, -1)
         r.expire(history_key, HISTORY_TTL)
 
+        # ltrim can strand a 'tool' message at the head if the assistant
+        # message with the matching tool_calls fell off the trimmed end —
+        # the API rejects a 'tool' message with no preceding tool_calls.
+        while True:
+            head = r.lindex(history_key, 0)
+            if head is None or json.loads(head).get("role") != "tool":
+                break
+            r.lpop(history_key)
+
         with transaction.atomic():
             Message.objects.create(
                 conversation=conversation,

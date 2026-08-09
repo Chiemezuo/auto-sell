@@ -368,3 +368,127 @@ def test_notify_owner_escalation_sends_whatsapp(tenant, conversation, monkeypatc
     assert recipient == tenant.owner_phone
     assert conversation.customer_wa_id in message
     assert "customer wants a refund" in message
+
+
+# ---------------------------------------------------------------------------
+# Phase transitions
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_phase_greeting_to_recommendation(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    conversation.phase = Conversation.PHASE_GREETING
+    conversation.save()
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "Do you have iPhones?",
+        "wa_message_id": "msg_phase_1",
+    })
+    conversation.refresh_from_db()
+    assert conversation.phase == Conversation.PHASE_RECOMMENDATION
+
+
+@pytest.mark.django_db
+def test_phase_discovery_to_negotiation(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    conversation.phase = Conversation.PHASE_DISCOVERY
+    conversation.save()
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "That's too expensive, can you give me a discount?",
+        "wa_message_id": "msg_phase_2",
+    })
+    conversation.refresh_from_db()
+    assert conversation.phase == Conversation.PHASE_NEGOTIATION
+
+
+@pytest.mark.django_db
+def test_phase_recommendation_to_close(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    conversation.phase = Conversation.PHASE_RECOMMENDATION
+    conversation.save()
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "I'll take it! Send me the payment link.",
+        "wa_message_id": "msg_phase_3",
+    })
+    conversation.refresh_from_db()
+    assert conversation.phase == Conversation.PHASE_CLOSE
+
+
+# ---------------------------------------------------------------------------
+# New conversation state guards
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_owner_handling_conversation_is_silent(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    conversation.state = Conversation.STATE_OWNER_HANDLING
+    conversation.save()
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "Hello?",
+        "wa_message_id": "msg_owner_1",
+    })
+    mock_chat.chat.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_co_pilot_drafting_conversation_is_silent(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    conversation.state = Conversation.STATE_CO_PILOT_DRAFTING
+    conversation.save()
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "Hello?",
+        "wa_message_id": "msg_copilot_1",
+    })
+    mock_chat.chat.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Non-text reply variety
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_unsupported_image_gets_specific_reply(tenant, monkeypatch):
+    mock_client = MagicMock()
+    monkeypatch.setattr("apps.conversations.tasks.WhatsAppClient", lambda t: mock_client)
+    reply_unsupported_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": "2348099999999",
+        "message_type": "image",
+    })
+    _wa_id, text = mock_client.send_text.call_args[0]
+    assert "photo" in text.lower()
+
+
+@pytest.mark.django_db
+def test_unsupported_voice_gets_specific_reply(tenant, monkeypatch):
+    mock_client = MagicMock()
+    monkeypatch.setattr("apps.conversations.tasks.WhatsAppClient", lambda t: mock_client)
+    reply_unsupported_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": "2348099999999",
+        "message_type": "voice",
+    })
+    _wa_id, text = mock_client.send_text.call_args[0]
+    assert "voice" in text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Prompt version tracking
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_assistant_message_stores_prompt_version(tenant, conversation, fake_redis, mock_chat, mock_whatsapp):
+    from apps.conversations.prompts import PROMPT_VERSION
+    process_message.apply(kwargs={
+        "tenant_id": str(tenant.id),
+        "customer_wa_id": conversation.customer_wa_id,
+        "message_text": "Hello",
+        "wa_message_id": "msg_version_1",
+    })
+    msg = conversation.messages.filter(role="assistant").first()
+    assert msg is not None
+    assert msg.prompt_version == PROMPT_VERSION

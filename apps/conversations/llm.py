@@ -180,6 +180,13 @@ def get_provider(tenant, tier: str = "primary") -> LLMProvider:
         return DeepSeekProvider()
 
 
+def get_embedding_provider() -> LLMProvider:
+    key = getattr(settings, "OPENAI_API_KEY", "")
+    if key:
+        return OpenAIProvider(api_key=key)
+    return DeepSeekProvider()
+
+
 def chat(messages: list, tools: list | None = None):
     provider = DeepSeekProvider()
     return provider.chat(messages, tools=tools)

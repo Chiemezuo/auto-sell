@@ -11,6 +11,7 @@ DEBUG = env.bool("DEBUG", default=False)
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -20,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.postgres",
     # Third-party
     "axes",
+    "channels",
     "django_extensions",
     # Local apps
     "apps.tenants",
@@ -27,6 +29,7 @@ INSTALLED_APPS = [
     "apps.conversations",
     "apps.payments",
     "apps.notifications",
+    "apps.dashboard",
 ]
 
 MIDDLEWARE = [
@@ -54,6 +57,7 @@ AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
 
 ROOT_URLCONF = "auto_sell.urls"
 WSGI_APPLICATION = "auto_sell.wsgi.application"
+ASGI_APPLICATION = "auto_sell.asgi.application"
 
 TEMPLATES = [
     {
@@ -91,6 +95,16 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "UTC"
+
+# Channels
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [REDIS_URL],
+        },
+    },
+}
 
 from celery.schedules import crontab  # noqa: E402
 CELERY_BEAT_SCHEDULE = {

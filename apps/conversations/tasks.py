@@ -11,7 +11,7 @@ from django.db import transaction
 from django.utils import timezone
 from apps.tenants.models import Tenant
 from apps.catalog.models import Product
-from apps.catalog.search import get_relevant_products
+from apps.catalog.search import hybrid_search
 from .models import Conversation, Message
 from .whatsapp import WhatsAppClient
 from .llm import get_provider
@@ -158,7 +158,7 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
 
         # Phase determination
         products_key = f"conversation:{conversation.id}:products"
-        fresh_products = get_relevant_products(tenant.id, message_text)
+        fresh_products = hybrid_search(tenant.id, message_text)
         if fresh_products:
             r.set(products_key, json.dumps([str(p.id) for p in fresh_products]), ex=HISTORY_TTL)
             products = fresh_products
@@ -247,6 +247,8 @@ def process_message(self, tenant_id: str, customer_wa_id: str, message_text: str
             )
             conversation.last_message_at = timezone.now()
             conversation.save(update_fields=["last_message_at"])
+
+        _publish_conversation_event(tenant_id, conversation, reply_text)
     except Exception as exc:
         logger.exception("process_message failed for conversation %s (tenant %s): %s", customer_wa_id, tenant_id, exc)
         r.delete(lock_key)
@@ -298,6 +300,37 @@ def sweep_abandoned_conversations():
         state=Conversation.STATE_AWAITING_PAYMENT,
         last_message_at__lt=now - timedelta(hours=48),
     ).update(state=Conversation.STATE_ABANDONED)
+
+
+def _publish_conversation_event(tenant_id: str, conversation, reply_text: str):
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            group = f"dashboard_{tenant_id}"
+            async_to_sync(channel_layer.group_send)(
+                group,
+                {
+                    "type": "new_message",
+                    "conversation_id": str(conversation.id),
+                    "role": "assistant",
+                    "content": reply_text[:200],
+                    "created_at": timezone.now().isoformat(),
+                },
+            )
+            async_to_sync(channel_layer.group_send)(
+                group,
+                {
+                    "type": "conversation_update",
+                    "conversation_id": str(conversation.id),
+                    "customer_wa_id": conversation.customer_wa_id,
+                    "state": conversation.state,
+                    "last_message_at": timezone.now().isoformat(),
+                },
+            )
+    except Exception:
+        logger.debug("Failed to publish dashboard event", exc_info=True)
 
 
 def _dispatch_tool(tool_call, tenant, conversation, customer_wa_id, wa_client):

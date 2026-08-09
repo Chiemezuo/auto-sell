@@ -47,7 +47,7 @@
 - [x] 4.4 Create `hybrid_search(tenant_id, query_text, limit=10)` in `apps/catalog/search.py`: run FTS and semantic in parallel, merge + deduplicate results, prioritize results appearing in both
 - [x] 4.5 Update `process_message` to call `hybrid_search` instead of `get_relevant_products`
 - [x] 4.6 Create backfill management command: `python manage.py backfill_embeddings` to generate embeddings for all existing products
-- [ ] 4.7 Add GIN index on `embedding` field for cosine similarity performance
+- [x] 4.7 Add HNSW index on `embedding` field for cosine similarity performance
 
 ## 5. Co-Pilot Dashboard — WebSocket + UI
 
@@ -84,18 +84,18 @@
 
 ## 8. Testing
 
-- [ ] 8.1 Write tests for LLM provider factory: correct provider returned per tenant config, fallback behavior
-- [ ] 8.2 Write tests for conversation phase transitions: greeting→discovery, discovery→recommendation, recommendation→negotiation, negotiation→close
+- [x] 8.1 Write tests for LLM provider factory: correct provider returned per tenant config, fallback behavior
+- [x] 8.2 Write tests for conversation phase transitions: greeting→discovery, discovery→recommendation, recommendation→negotiation, negotiation→close
 - [ ] 8.3 Write tests for sentiment-aware prompt selection: frustrated→de-escalation, excited→accelerate, hesitant→address-concerns
 - [ ] 8.4 Write tests for multi-message sequence dispatch: splitting, delays, WhatsApp send calls
-- [ ] 8.5 Write tests for non-text message handling: image, voice, sticker each get appropriate response
+- [x] 8.5 Write tests for non-text message handling: image, voice, sticker each get appropriate response
 - [ ] 8.6 Write tests for smart negotiation: social proof mentions (best-seller), scarcity mentions (low stock), bundling suggestions
 - [ ] 8.7 Write tests for semantic search: embedding generation, cosine similarity query, hybrid merge with FTS
 - [ ] 8.8 Write tests for dashboard WebSocket: connection auth, event push on new message, tenant scoping
-- [ ] 8.9 Write tests for co-pilot states: owner_handling skips LLM, co_pilot_drafting queues messages, take-over/hand-back transitions
+- [x] 8.9 Write tests for co-pilot states: owner_handling skips LLM, co_pilot_drafting queues messages, take-over/hand-back transitions
 - [ ] 8.10 Write tests for feedback: rating creates BotFeedback, editing stores original+edited, prompt_version tracked
 - [ ] 8.11 Write tests for post-purchase follow-ups: records created on sale, dispatched on schedule, cancelled on payment
-- [ ] 8.12 Run full test suite: `pytest tests/ apps/ -v` — all existing 41 tests must still pass
+- [x] 8.12 Run full test suite: `pytest tests/ apps/ -v` — all existing 41 tests must still pass
 
 ## 9. Deployment Preparation
 

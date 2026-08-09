@@ -96,11 +96,15 @@ from celery.schedules import crontab  # noqa: E402
 CELERY_BEAT_SCHEDULE = {
     "sweep-abandoned-conversations": {
         "task": "apps.conversations.tasks.sweep_abandoned_conversations",
-        "schedule": crontab(minute=0),  # every hour on the hour
+        "schedule": crontab(minute=0),
     },
     "daily-owner-digest": {
         "task": "apps.notifications.tasks.notify_owner_daily_digest",
-        "schedule": crontab(hour=7, minute=0),  # 7am UTC = 8am WAT
+        "schedule": crontab(hour=7, minute=0),
+    },
+    "dispatch-due-follow-ups": {
+        "task": "apps.payments.tasks.dispatch_due_follow_ups",
+        "schedule": crontab(minute="*/15"),
     },
 }
 

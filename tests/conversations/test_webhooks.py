@@ -103,7 +103,7 @@ def test_non_text_message_enqueues_reply_unsupported(client, tenant):
             HTTP_X_HUB_SIGNATURE_256=sign_wa_request(tenant.wa_app_secret, body),
         )
     assert response.status_code == 200
-    mock_delay.assert_called_once_with(str(tenant.id), "2348099999999")
+    mock_delay.assert_called_once_with(str(tenant.id), "2348099999999", "image")
 
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ from uuid import uuid4
 from django.db import models
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField
+from pgvector.django import VectorField
 from apps.tenants.models import Tenant
 
 
@@ -21,6 +22,7 @@ class Product(models.Model):
         help_text="Leave blank to disable stock tracking. When set, the bot is aware of remaining units and availability is auto-updated on sale.",
     )
     search_vector = SearchVectorField(null=True, blank=True)
+    embedding = VectorField(dimensions=1536, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -58,7 +58,7 @@ def receive_message(request: HttpRequest, tenant_slug: str):
                     continue
 
                 if message.type != "text":
-                    reply_unsupported_message.delay(str(tenant.id), message.from_)
+                    reply_unsupported_message.delay(str(tenant.id), message.from_, message.type)
                     continue
 
                 if Message.objects.filter(wa_message_id=message.id).exists():

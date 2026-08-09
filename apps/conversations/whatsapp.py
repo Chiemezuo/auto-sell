@@ -18,6 +18,21 @@ class WhatsAppClient:
             "text": {"body": body},
         })
 
+    def send_template(self, to: str, template_name: str, parameters: list[str] | None = None) -> dict:
+        components = []
+        if parameters:
+            body_params = [{"type": "text", "text": p} for p in parameters]
+            components.append({"type": "body", "parameters": body_params})
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {"name": template_name, "language": {"code": "en"}},
+        }
+        if components:
+            payload["template"]["components"] = components
+        return self._post("/messages", payload)
+
     def send_media(self, to: str, media_type: str, media_id: str, caption: str = None) -> dict:
         payload = {
             "messaging_product": "whatsapp",

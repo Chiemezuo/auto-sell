@@ -19,7 +19,7 @@ def test_process_message_lock_prevents_double_processing(tenant, conversation, f
         "wa_message_id": "msg_lock_test",
     })
 
-    mock_chat.assert_not_called()
+    mock_chat.chat.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -38,7 +38,7 @@ def test_completed_conversation_stays_silent(
 
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_COMPLETED
-    mock_chat.assert_not_called()
+    mock_chat.chat.assert_not_called()
     mock_whatsapp.send_text.assert_not_called()
 
 
@@ -58,7 +58,7 @@ def test_returning_customer_resets_abandoned_conversation(
 
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_ACTIVE
-    mock_chat.assert_called_once()
+    mock_chat.chat.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -82,7 +82,7 @@ def test_awaiting_payment_sends_reminder_when_link_pending(
         "wa_message_id": "msg_awaiting_1",
     })
 
-    mock_chat.assert_not_called()
+    mock_chat.chat.assert_not_called()
     mock_whatsapp.send_text.assert_called_once()
     _wa_id, reminder_text = mock_whatsapp.send_text.call_args[0]
     assert "payment" in reminder_text.lower()
@@ -111,7 +111,7 @@ def test_awaiting_payment_resets_when_link_expired(
 
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_ACTIVE
-    mock_chat.assert_called_once()
+    mock_chat.chat.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -137,7 +137,7 @@ def test_awaiting_payment_resets_when_link_failed(
 
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_ACTIVE
-    mock_chat.assert_called_once()
+    mock_chat.chat.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -156,7 +156,7 @@ def test_awaiting_payment_resets_when_no_link(
 
     conversation.refresh_from_db()
     assert conversation.state == Conversation.STATE_ACTIVE
-    mock_chat.assert_called_once()
+    mock_chat.chat.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -190,7 +190,7 @@ def test_rate_limit_under_threshold_passes_through(tenant, conversation, fake_re
         "wa_message_id": "msg_rate_under_1",
     })
 
-    mock_chat.assert_called_once()
+    mock_chat.chat.assert_called_once()
 
 
 @pytest.mark.django_db
@@ -205,7 +205,7 @@ def test_rate_limit_over_threshold_blocks_llm_and_sends_reply(tenant, conversati
         "wa_message_id": "msg_rate_over_1",
     })
 
-    mock_chat.assert_not_called()
+    mock_chat.chat.assert_not_called()
     mock_whatsapp.send_text.assert_called_once()
     _wa_id, reply_text = mock_whatsapp.send_text.call_args[0]
     assert any(word in reply_text.lower() for word in ("wait", "fast"))
@@ -322,7 +322,7 @@ def test_escalated_conversation_is_silent(tenant, conversation, fake_redis, mock
         "wa_message_id": "msg_escalated_1",
     })
 
-    mock_chat.assert_not_called()
+    mock_chat.chat.assert_not_called()
     mock_whatsapp.send_text.assert_not_called()
 
 
@@ -335,8 +335,8 @@ def test_escalation_tool_sets_state_and_notifies_owner(
     tool_call.function.name = "escalate_to_human"
     tool_call.function.arguments = '{"reason": "customer wants a refund"}'
 
-    mock_chat.return_value.choices[0].message.content = None
-    mock_chat.return_value.choices[0].message.tool_calls = [tool_call]
+    mock_chat.chat.return_value.choices[0].message.content = None
+    mock_chat.chat.return_value.choices[0].message.tool_calls = [tool_call]
 
     mock_notify = MagicMock()
     monkeypatch.setattr("apps.notifications.tasks.notify_owner_escalation", mock_notify)

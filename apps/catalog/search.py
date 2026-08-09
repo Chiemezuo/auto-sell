@@ -7,6 +7,6 @@ def get_relevant_products(tenant_id, query_text: str, limit: int = 5):
     return (
         Product.objects.filter(tenant_id=tenant_id, is_available=True)
         .annotate(rank=SearchRank("search_vector", query))
-        .filter(rank__gt=0)
+        .filter(rank__gt=0.001)
         .order_by("-rank")[:limit]
     )

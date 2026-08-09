@@ -9,7 +9,7 @@ from django.utils import timezone
 from apps.conversations.models import Conversation
 from apps.catalog.models import Product
 from .gateways.paystack import PaystackGateway
-from .models import PaymentLink, Sale
+from .models import PaymentLink, Sale, PostSaleFollowUp
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,14 @@ def paystack_webhook(request: HttpRequest):
     send_confirmation.delay(str(payment_link.conversation.id))
     for name in sold_out_names:
         notify_owner_stock_out.delay(str(payment_link.tenant_id), name)
+
+    # Schedule post-sale follow-ups
+    from .tasks import schedule_post_sale_follow_ups, _schedule_cart_follow_ups
+    schedule_post_sale_follow_ups(payment_link.tenant, payment_link.conversation, sale)
+    # Cancel any pending cart re-engagement follow-ups for this link
+    PostSaleFollowUp.objects.filter(payment_link=payment_link, status=PostSaleFollowUp.STATUS_PENDING).update(
+        status=PostSaleFollowUp.STATUS_CANCELLED
+    )
 
     return {"status": "ok"}
 

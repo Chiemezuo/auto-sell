@@ -83,9 +83,10 @@ def mock_chat(monkeypatch):
     mock_response = MagicMock()
     mock_response.choices[0].message.content = "How can I help you today?"
     mock_response.choices[0].message.tool_calls = None
-    mock = MagicMock(return_value=mock_response)
-    monkeypatch.setattr("apps.conversations.tasks.chat", mock)
-    return mock
+    mock_provider = MagicMock()
+    mock_provider.chat.return_value = mock_response
+    monkeypatch.setattr("apps.conversations.tasks.get_provider", lambda tenant, tier="primary": mock_provider)
+    return mock_provider
 
 
 @pytest.fixture

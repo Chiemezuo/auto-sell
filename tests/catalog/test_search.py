@@ -38,7 +38,7 @@ def test_search_excludes_unavailable_products(tenant, product):
 
 @pytest.mark.django_db
 def test_search_returns_empty_for_no_match(tenant, product):
-    results = list(get_relevant_products(tenant.id, "xyzzy_no_match_at_all"))
+    results = list(get_relevant_products(tenant.id, "zzzxxxyyyzzz_no_match_query"))
     assert len(results) == 0
 
 

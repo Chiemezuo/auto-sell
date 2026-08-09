@@ -56,5 +56,37 @@ services:
       - worker
       - full
 
+  beat:
+    build: .
+    command: celery -A auto_sell beat -l info
+    volumes:
+      - .:/app
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - beat
+      - full
+
+  asgi:
+    build: .
+    command: daphne -b 0.0.0.0 -p 8001 auto_sell.asgi:application
+    volumes:
+      - .:/app
+    ports:
+      - "8001:8001"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - asgi
+      - full
+
 volumes:
   postgres_data:

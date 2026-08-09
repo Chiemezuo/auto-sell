@@ -7,6 +7,10 @@ DEBUG = False
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS")
 
+# Django Channels — WebSocket connections need the host in ALLOWED_HOSTS
+# The ASGI server (daphne) runs on a separate port or behind the same reverse proxy.
+# The channel layer uses the same REDIS_URL from base settings.
+
 # Needed behind a reverse proxy (Coolify/Traefik) — Django 4+ checks POST requests'
 # Origin/Referer against this list, and same-origin alone isn't enough once SSL
 # termination happens upstream. e.g. CSRF_TRUSTED_ORIGINS=https://autosell.yourdomain.com

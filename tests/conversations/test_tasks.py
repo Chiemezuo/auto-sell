@@ -492,3 +492,154 @@ def test_assistant_message_stores_prompt_version(tenant, conversation, fake_redi
     msg = conversation.messages.filter(role="assistant").first()
     assert msg is not None
     assert msg.prompt_version == PROMPT_VERSION
+
+
+# ---------------------------------------------------------------------------
+# Sentiment-aware prompt selection
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_sentiment_classified_on_process(tenant, conversation, fake_redis, mock_chat, mock_whatsapp, monkeypatch):
+    from apps.conversations.llm import LLMProvider
+    mock_provider = MagicMock(spec=LLMProvider)
+    mock_provider.classify.return_value = "frustrated"
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = "I understand your frustration."
+    mock_response.choices[0].message.tool_calls = None
+    mock_provider.chat.return_value = mock_response
+
+    get_provider_original = None
+    try:
+        from apps.conversations.tasks import get_provider as task_get_provider
+        def mock_get(tenant, tier="primary"):
+            return mock_provider
+        monkeypatch.setattr("apps.conversations.tasks.get_provider", mock_get)
+        process_message.apply(kwargs={
+            "tenant_id": str(tenant.id),
+            "customer_wa_id": conversation.customer_wa_id,
+            "message_text": "This is way too expensive!",
+            "wa_message_id": "msg_sentiment_1",
+        })
+    finally:
+        pass
+
+    mock_provider.classify.assert_called()
+    mock_provider.chat.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Feedback model
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_create_feedback_record(tenant, conversation):
+    from apps.conversations.models import BotFeedback
+    msg = conversation.messages.create(
+        conversation=conversation,
+        role="assistant",
+        content="How can I help?",
+        prompt_version="v1.0",
+    )
+    feedback = BotFeedback.objects.create(
+        conversation=conversation,
+        message=msg,
+        tenant=tenant,
+        feedback_type=BotFeedback.FEEDBACK_GOOD,
+        prompt_version="v1.0",
+        context_snapshot=[{"role": "user", "content": "Hi"}],
+    )
+    assert feedback.id is not None
+    assert feedback.feedback_type == "good"
+
+
+@pytest.mark.django_db
+def test_feedback_stores_edited_response(tenant, conversation):
+    from apps.conversations.models import BotFeedback
+    msg = conversation.messages.create(
+        conversation=conversation,
+        role="assistant",
+        content="Original reply",
+        prompt_version="v2.0",
+    )
+    feedback = BotFeedback.objects.create(
+        conversation=conversation,
+        message=msg,
+        tenant=tenant,
+        feedback_type=BotFeedback.FEEDBACK_EDITED,
+        edited_response="Edited reply by owner",
+        prompt_version="v2.0",
+    )
+    assert feedback.edited_response == "Edited reply by owner"
+
+
+# ---------------------------------------------------------------------------
+# Post-purchase follow-ups
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db
+def test_follow_up_created_on_sale(tenant, conversation):
+    from apps.payments.models import PaymentLink, Sale, PostSaleFollowUp
+    link = PaymentLink.objects.create(
+        conversation=conversation, tenant=tenant,
+        amount="1000.00", currency="NGN",
+        gateway="paystack", gateway_reference="ref_test_fu",
+        payment_url="https://paystack.com/pay/test",
+    )
+    sale = Sale.objects.create(
+        payment_link=link, tenant=tenant, conversation=conversation,
+        customer_wa_id=conversation.customer_wa_id,
+        amount_paid="1000.00", items_snapshot=[],
+        gateway_payload={},
+    )
+    from apps.payments.tasks import schedule_post_sale_follow_ups
+    tenant.follow_up_enabled = True
+    tenant.save()
+    schedule_post_sale_follow_ups(tenant, conversation, sale)
+    follow_ups = PostSaleFollowUp.objects.filter(sale=sale)
+    assert follow_ups.count() == 4
+
+
+@pytest.mark.django_db
+def test_follow_up_not_created_when_disabled(tenant, conversation):
+    from apps.payments.models import PaymentLink, Sale, PostSaleFollowUp
+    link = PaymentLink.objects.create(
+        conversation=conversation, tenant=tenant,
+        amount="1000.00", currency="NGN",
+        gateway="paystack", gateway_reference="ref_test_fu2",
+        payment_url="https://paystack.com/pay/test",
+    )
+    sale = Sale.objects.create(
+        payment_link=link, tenant=tenant, conversation=conversation,
+        customer_wa_id=conversation.customer_wa_id,
+        amount_paid="1000.00", items_snapshot=[],
+        gateway_payload={},
+    )
+    from apps.payments.tasks import schedule_post_sale_follow_ups
+    tenant.follow_up_enabled = False
+    tenant.save()
+    schedule_post_sale_follow_ups(tenant, conversation, sale)
+    follow_ups = PostSaleFollowUp.objects.filter(sale=sale)
+    assert follow_ups.count() == 0
+
+
+@pytest.mark.django_db
+def test_cart_follow_ups_cancelled_on_payment(tenant, conversation):
+    from apps.payments.models import PaymentLink, Sale, PostSaleFollowUp
+    from django.utils import timezone
+    from datetime import timedelta
+    link = PaymentLink.objects.create(
+        conversation=conversation, tenant=tenant,
+        amount="1000.00", currency="NGN",
+        gateway="paystack", gateway_reference="ref_test_fu3",
+        payment_url="https://paystack.com/pay/test",
+    )
+    PostSaleFollowUp.objects.create(
+        payment_link=link, tenant=tenant, conversation=conversation,
+        schedule_type=PostSaleFollowUp.SCHEDULE_CART_2H,
+        scheduled_at=timezone.now() + timedelta(hours=2),
+    )
+    PostSaleFollowUp.objects.filter(
+        payment_link=link,
+        status=PostSaleFollowUp.STATUS_PENDING,
+    ).update(status=PostSaleFollowUp.STATUS_CANCELLED)
+    assert PostSaleFollowUp.objects.filter(payment_link=link, status="cancelled").count() == 1
